@@ -4,3 +4,9 @@ http_server:
   address: "localhost:8082"
   timeout: 4s
   idle_timeout: 60s
+db_credentials:
+  name: codular_db
+  user: codular_user
+  password: codular_pass
+  port: 5432
+  host_name: "localhost"

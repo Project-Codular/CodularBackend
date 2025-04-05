@@ -1,0 +1,17 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:latest
+    container_name: codular_postgres
+    environment:
+      POSTGRES_USER: codular_user
+      POSTGRES_PASSWORD: codular_pass
+      POSTGRES_DB: codular_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

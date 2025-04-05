@@ -2,9 +2,12 @@ package main
 
 import (
 	"codium-backend/internal/config"
+	"codium-backend/internal/storage/postgresql"
 	"codium-backend/lib/logger/handlers/slogpretty"
+	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -24,7 +27,12 @@ func main() {
 	logger.Info("Starting Codular backend", slog.String("env", cfg.Env))
 	logger.Debug("Debug messages are enabled")
 
-	// todo init storage
+	if err := postgresql.InitDB(cfg); err != nil {
+		logger.Error(fmt.Sprintf("Error while initializing DB: %s", err))
+		log.Fatalf("Failed to init DB: %s", err)
+		return
+	}
+	defer postgresql.CloseDB()
 
 	router := chi.NewRouter()
 
