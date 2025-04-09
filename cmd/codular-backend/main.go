@@ -2,6 +2,7 @@ package main
 
 import (
 	"codium-backend/internal/config"
+	"codium-backend/internal/http_server/handlers/skips"
 	"codium-backend/internal/storage/postgresql"
 	"codium-backend/lib/logger/handlers/slogpretty"
 	"fmt"
@@ -34,12 +35,16 @@ func main() {
 	}
 	defer postgresql.CloseDB()
 
+	storage := postgresql.DB
+
 	router := chi.NewRouter()
 
 	router.Use(middleware.RequestID)
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
 	router.Use(middleware.URLFormat)
+
+	router.Post("/skips/generate", skips.New(logger, storage, cfg))
 
 	logger.Info("starting server", slog.String("address", cfg.HTTPServer.Address))
 

@@ -20,6 +20,7 @@ type Config struct {
 	StoragePath   string        `yaml:"storage_path" env_required:"true"`
 	DBCredentials DBCredentials `yaml:"db_credentials"`
 	HTTPServer    HTTPServer    `yaml:"http_server"`
+	AliasLength   int           `yaml:"alias_length"`
 }
 
 type HTTPServer struct {
