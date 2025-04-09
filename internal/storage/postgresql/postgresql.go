@@ -10,7 +10,21 @@ import (
 
 var DB *pgxpool.Pool
 
-func InitDB(cfg *config.Config) error {
+type Storage struct {
+	db *pgxpool.Pool
+}
+
+func (s *Storage) SaveSkipsCode(userCode string, skipsNumber int) (int64, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s *Storage) GetSkipsCode(codeAlias string) (string, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func New(cfg *config.Config) (*Storage, error) {
 	dsn := "postgres://" +
 		cfg.DBCredentials.User + ":" +
 		cfg.DBCredentials.Password + "@" +
@@ -20,16 +34,16 @@ func InitDB(cfg *config.Config) error {
 
 	pool, err := pgxpool.New(context.Background(), dsn)
 	if err != nil {
-		return fmt.Errorf("Unable to connect to database: %v\n", err)
+		return nil, fmt.Errorf("Unable to connect to database: %v\n", err)
 	}
 
 	err = pool.Ping(context.Background())
 	if err != nil {
-		return fmt.Errorf("Unable to ping database: %v\n", err)
+		return nil, fmt.Errorf("Unable to ping database: %v\n", err)
 	}
 
 	DB = pool
-	return nil
+	return &Storage{db: DB}, nil
 }
 
 func CloseDB() {

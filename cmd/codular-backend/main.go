@@ -28,14 +28,13 @@ func main() {
 	logger.Info("Starting Codular backend", slog.String("env", cfg.Env))
 	logger.Debug("Debug messages are enabled")
 
-	if err := postgresql.InitDB(cfg); err != nil {
+	storage, err := postgresql.New(cfg)
+	if err != nil {
 		logger.Error(fmt.Sprintf("Error while initializing DB: %s", err))
 		log.Fatalf("Failed to init DB: %s", err)
 		return
 	}
 	defer postgresql.CloseDB()
-
-	storage := postgresql.DB
 
 	router := chi.NewRouter()
 
