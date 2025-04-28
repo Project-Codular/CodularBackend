@@ -30,11 +30,13 @@ type HTTPServer struct {
 }
 
 type DBCredentials struct {
-	Name     string `yaml:"name" env_required:"true"`
-	User     string `yaml:"user" env_required:"true"`
-	Password string `yaml:"password" env_required:"true"`
-	Port     int    `yaml:"port" env-default:"5432"`
-	HostName string `yaml:"host_name" env-default:"localhost"`
+	SuperUser         string `yaml:"super_user" env_required:"true"`
+	SuperUserPassword string `yaml:"super_user_password" env_required:"true"`
+	Name              string `yaml:"name" env_required:"true"`
+	User              string `yaml:"user" env_required:"true"`
+	Password          string `yaml:"password" env_required:"true"`
+	Port              int    `yaml:"port" env-default:"5432"`
+	HostName          string `yaml:"host_name" env-default:"localhost"`
 }
 
 func MustLoad() *Config {

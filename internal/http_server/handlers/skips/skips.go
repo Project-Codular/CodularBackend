@@ -3,17 +3,21 @@ package skips
 import (
 	"codium-backend/internal/config"
 	"codium-backend/internal/storage"
+	openRouterAPI "codium-backend/lib/api/openrouter"
 	response_info "codium-backend/lib/api/response"
 	"codium-backend/lib/logger/sl"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
 	"github.com/go-playground/validator/v10"
 	"io"
+	"log"
 	"log/slog"
 	"net/http"
+	"os"
 )
 
 type Request struct {
@@ -29,7 +33,7 @@ type Response struct {
 
 //go:generate go run github.com/vektra/mockery/v2@v2.53.3 --name=URLSaver
 type SkipsGenerator interface {
-	SaveSkipsCode(userCode string, skipsNumber int) (int64, error)
+	SaveSkipsCode(userCode string, skipsNumber int, alias string) (int64, error)
 	GetSkipsCode(codeAlias string) (string, error)
 }
 
@@ -122,7 +126,7 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, cfg *config.Config) ht
 				break
 			}
 			if err != nil { // some other error occurred
-				log.Error("failed to check alias existence in db", sl.Err(err))
+				log.Error("failed to check alias "+alias+" existence in db", sl.Err(err))
 
 				writer.WriteHeader(http.StatusInternalServerError)
 				render.JSON(writer, request, getErrorResponse("failed to check alias existence in db"))
@@ -131,7 +135,7 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, cfg *config.Config) ht
 			}
 		}
 
-		id, err := skipsGenerator.SaveSkipsCode(decodedRequest.Code, decodedRequest.SkipsNumber)
+		id, err := skipsGenerator.SaveSkipsCode(decodedRequest.Code, decodedRequest.SkipsNumber, alias)
 		if err != nil {
 			log.Error("error while saving skips code", sl.Err(err))
 
@@ -148,7 +152,29 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, cfg *config.Config) ht
 }
 
 func processCode(code string, number int) (string, error) {
-	return "mock", nil
+	apiKey := os.Getenv("OPENROUTER_API_KEY")
+	model := "deepseek/deepseek-r1:free"
+	temperature := 0.7
+
+	client := openRouterAPI.NewClient(apiKey, model, temperature)
+
+	prompts, err := openRouterAPI.LoadSystemPrompts("./config/system_prompts.yaml")
+	if err != nil {
+		log.Fatalf("Error loading system prompts: %v", err)
+	}
+
+	systemPrompt, exists := prompts["omissions"]
+	if !exists {
+		log.Fatalf("System prompt not found in the YAML file")
+	}
+
+	response, err := client.SendChat(systemPrompt, code)
+	if err != nil {
+		log.Fatalf("Error sending request: %v", err)
+	}
+	fmt.Println("Response from OpenAI:", response)
+
+	return response, nil
 }
 
 func generateAlias(length int) string {
