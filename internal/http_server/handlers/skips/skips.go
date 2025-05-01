@@ -26,9 +26,9 @@ type Request struct {
 }
 
 type Response struct {
-	ResponseInfo    response_info.ResponseInfo
-	ProcessedCode   string `json:"processedCode"`
-	ProcessedCodeId string `json:"processedCodeId"`
+	ResponseInfo    response_info.ResponseInfo `json:"responseInfo"`
+	ProcessedCode   string                     `json:"processedCode"`
+	ProcessedCodeId string                     `json:"processedCodeId"`
 }
 
 //go:generate go run github.com/vektra/mockery/v2@v2.53.3 --name=URLSaver
@@ -61,6 +61,17 @@ func getOKResponse(processedCode string, processedCodeId string) *Response {
 	}
 }
 
+// New generates skips for the provided code and saves it to the database.
+// @Summary Generate and save skips for code
+// @Description Processes the provided source code with a specified number of skips, generates a unique alias, and saves it to the database.
+// @Tags Skips
+// @Accept json
+// @Produce json
+// @Param request body Request true "Source code and number of skips"
+// @Success 200 {object} Response "Successfully generated and saved skips"
+// @Failure 400 {object} Response "Invalid request or empty body"
+// @Failure 500 {object} Response "Internal server error"
+// @Router /skips/generate [post]
 func New(log *slog.Logger, skipsGenerator SkipsGenerator, cfg *config.Config) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		const functionPath = "internal.http_server.handlers.skips.New"
@@ -74,20 +85,14 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, cfg *config.Config) ht
 		err := render.DecodeJSON(request.Body, &decodedRequest)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				// Такую ошибку встретим, если получили запрос с пустым телом.
-				// Обработаем её отдельно
 				log.Error("request body is empty")
-
 				writer.WriteHeader(http.StatusBadRequest)
 				render.JSON(writer, request, getErrorResponse("empty request"))
-
 				return
 			} else {
 				log.Error("failed to decode request body", sl.Err(err))
-
 				writer.WriteHeader(http.StatusInternalServerError)
 				render.JSON(writer, request, getErrorResponse("failed to decode request"))
-
 				return
 			}
 		}
@@ -97,22 +102,17 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, cfg *config.Config) ht
 		if err := validator.New().Struct(decodedRequest); err != nil {
 			var validationErrs validator.ValidationErrors
 			errors.As(err, &validationErrs)
-
 			log.Error("invalid request", sl.Err(err))
-
 			writer.WriteHeader(http.StatusBadRequest)
 			render.JSON(writer, request, getValidationErrorResponse(validationErrs))
-
 			return
 		}
 
 		processedCode, err := processCode(decodedRequest.Code, decodedRequest.SkipsNumber)
 		if err != nil {
 			log.Error("failed to generate skips for code", sl.Err(err))
-
 			writer.WriteHeader(http.StatusInternalServerError)
 			render.JSON(writer, request, getErrorResponse("failed to generate skips for code"))
-
 			return
 		}
 
@@ -127,10 +127,8 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, cfg *config.Config) ht
 			}
 			if err != nil { // some other error occurred
 				log.Error("failed to check alias "+alias+" existence in db", sl.Err(err))
-
 				writer.WriteHeader(http.StatusInternalServerError)
 				render.JSON(writer, request, getErrorResponse("failed to check alias existence in db"))
-
 				return
 			}
 		}
@@ -138,10 +136,8 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, cfg *config.Config) ht
 		id, err := skipsGenerator.SaveSkipsCode(decodedRequest.Code, decodedRequest.SkipsNumber, alias)
 		if err != nil {
 			log.Error("error while saving skips code", sl.Err(err))
-
 			writer.WriteHeader(http.StatusInternalServerError)
 			render.JSON(writer, request, getErrorResponse("server error while saving code with skips"))
-
 			return
 		}
 
