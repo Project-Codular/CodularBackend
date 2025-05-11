@@ -7,19 +7,24 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: project_codular_db
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
     restart: unless-stopped
     networks:
       - codular_network
+    # Ensure scripts are executable
+    command: >
+      sh -c "
+        chmod +x /docker-entrypoint-initdb.d/*.sh;
+        docker-entrypoint.sh postgres
+      "
+    # Database port is not exposed externally
 
   backend:
     build:
@@ -32,18 +37,18 @@ services:
     ports:
       - "8082:8082"
     environment:
-      ENV: local
+      ENV: production
       DB_HOST: db
       DB_PORT: 5432
-      DB_USER: admin_codular
-      DB_PASSWORD: superAdmin
-      DB_NAME: project_codular_db
-      DB_SUPERUSER: postgres
-      DB_SUPERUSER_PASSWORD: postgres
-    command: ["/wait-for-it.sh", "db:5432", "-t", "60", "--", "./codular-backend"]
-    restart: unless-stopped
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${POSTGRES_DB}
+      DB_SUPERUSER: ${POSTGRES_USER}
+      DB_SUPERUSER_PASSWORD: ${POSTGRES_PASSWORD}
+    command: ["/app/wait-for-it.sh", "db:5432", "-t", "60", "--", "/app/codular-backend"]
     networks:
       - codular_network
+    restart: unless-stopped
 
 volumes:
   postgres_data:
