@@ -5,11 +5,13 @@ services:
     image: postgres:17-alpine
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
@@ -18,11 +20,7 @@ services:
     restart: unless-stopped
     networks:
       - codular_network
-    command: >
-      sh -c "
-        chmod +x /docker-entrypoint-initdb.d/*.sh;
-        docker-entrypoint.sh postgres
-      "
+    command: postgres
 
   backend:
     build:
@@ -43,6 +41,8 @@ services:
       DB_NAME: ${POSTGRES_DB}
       DB_SUPERUSER: ${POSTGRES_USER}
       DB_SUPERUSER_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./.env:/app/.env:ro
     command: ["/app/wait-for-it.sh", "db:5432", "-t", "60", "--", "/app/codular-backend"]
     networks:
       - codular_network
