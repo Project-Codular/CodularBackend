@@ -18,18 +18,24 @@ FROM alpine:3.20
 
 WORKDIR /app
 
-# Install ca-certificates for HTTPS requests and tzdata for time zones
-RUN apk --no-cache add ca-certificates tzdata
+# Install ca-certificates, tzdata, bash, and netcat-openbsd
+RUN apk --no-cache add ca-certificates tzdata bash netcat-openbsd
 
 # Copy the binary from the builder stage
-COPY --from=builder /app/codular-backend .
+COPY --from=builder /app/codular-backend /app/codular-backend
 
-# Copy wait-for-it.sh for database dependency
-COPY --from=builder /app/wait-for-it.sh .
-RUN chmod +x wait-for-it.sh
+# Copy wait-for-it.sh, fix line endings, and make executable
+COPY wait-for-it.sh /app/wait-for-it.sh
+RUN sed -i 's/\r$//' /app/wait-for-it.sh && \
+    chmod +x /app/wait-for-it.sh
+
+# Copy .env file
+COPY .env /app/.env
+COPY ./config/local.yaml /app/config/local.yaml
+COPY ./config/system_prompts.yaml /app/config/system_prompts.yaml
 
 # Expose the backend port
 EXPOSE 8082
 
 # Command to run the backend
-CMD ["./wait-for-it.sh", "db:5432", "-t", "60", "--", "./codular-backend"]
+CMD ["/app/wait-for-it.sh", "db:5432", "-t", "60", "--", "/app/codular-backend"]

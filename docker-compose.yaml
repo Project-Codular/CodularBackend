@@ -18,13 +18,11 @@ services:
     restart: unless-stopped
     networks:
       - codular_network
-    # Ensure scripts are executable
     command: >
       sh -c "
         chmod +x /docker-entrypoint-initdb.d/*.sh;
         docker-entrypoint.sh postgres
       "
-    # Database port is not exposed externally
 
   backend:
     build:
