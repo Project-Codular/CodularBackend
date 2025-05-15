@@ -1,14 +1,14 @@
 package openrouter
 
 import (
-"bytes"
-"encoding/json"
-"fmt"
-"io/ioutil"
-"net/http"
-"os"
-"strings"
-"gopkg.in/yaml.v2"
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"gopkg.in/yaml.v2"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"strings"
 )
 
 type OpenRouterClient struct {
@@ -19,7 +19,7 @@ type OpenRouterClient struct {
 
 func NewClient(apiKey, model string, temperature float64) *OpenRouterClient {
 	if model == "" {
-		model = "deepseek/deepseek-r1-zero:free"
+		model = "meta-llama/llama-4-scout:free"
 	}
 	if temperature == 0 {
 		temperature = 0.7

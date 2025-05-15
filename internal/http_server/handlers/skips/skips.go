@@ -149,7 +149,7 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, cfg *config.Config) ht
 
 func processCode(code string, number int) (string, error) {
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
-	model := "deepseek/deepseek-r1:free"
+	model := "meta-llama/llama-4-scout:free"
 	temperature := 0.7
 
 	client := openRouterAPI.NewClient(apiKey, model, temperature)
@@ -168,7 +168,7 @@ func processCode(code string, number int) (string, error) {
 	if err != nil {
 		log.Fatalf("Error sending request: %v", err)
 	}
-	fmt.Println("Response from OpenAI:", response)
+	fmt.Println("Response from OpenRouter:", response)
 
 	return response, nil
 }
