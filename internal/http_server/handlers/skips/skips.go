@@ -2,7 +2,6 @@ package skips
 
 import (
 	"codium-backend/internal/config"
-	"codium-backend/internal/storage"
 	openRouterAPI "codium-backend/lib/api/openrouter"
 	response_info "codium-backend/lib/api/response"
 	"codium-backend/lib/logger/sl"
@@ -18,11 +17,13 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 )
 
 type Request struct {
-	Code        string `json:"sourceCode" validate:"required"`
-	SkipsNumber int    `json:"skipsNumber" validate:"required,gte=0"`
+	Code                string `json:"sourceCode" validate:"required"`
+	SkipsNumber         int    `json:"skipsNumber" validate:"required,gte=0"`
+	ProgrammingLanguage string `json:"programmingLanguage" validate:"required"`
 }
 
 type Response struct {
@@ -31,10 +32,19 @@ type Response struct {
 	ProcessedCodeId string                     `json:"processedCodeId"`
 }
 
-//go:generate go run github.com/vektra/mockery/v2@v2.53.3 --name=URLSaver
+//go:generate go run github.com/vektra/mockery/v2@v2.53.3 --name=SkipsGenerator
 type SkipsGenerator interface {
-	SaveSkipsCode(userCode string, skipsNumber int, alias string) (int64, error)
-	GetSkipsCode(codeAlias string) (string, error)
+	SaveSkipsCodeWithAlias(skipsCode string, answers []string, programmingLanguageId int64, alias string) (int64, int64, error)
+	GetProgrammingLanguageIDByName(name string) (int64, error)
+}
+
+//go:generate go run github.com/vektra/mockery/v2@v2.53.3 --name=TasksProvider
+type TasksProvider interface {
+	GetSavedCode(alias string) (string, error)
+}
+
+type AliasChecker interface {
+	CheckAliasExist(alias string) (bool, error)
 }
 
 func getErrorResponse(msg string) *Response {
@@ -72,7 +82,7 @@ func getOKResponse(processedCode string, processedCodeId string) *Response {
 // @Failure 400 {object} Response "Invalid request or empty body"
 // @Failure 500 {object} Response "Internal server error"
 // @Router /skips/generate [post]
-func New(log *slog.Logger, skipsGenerator SkipsGenerator, cfg *config.Config) http.HandlerFunc {
+func New(log *slog.Logger, skipsGenerator SkipsGenerator, aliasChecker AliasChecker, cfg *config.Config) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		const functionPath = "internal.http_server.handlers.skips.New"
 
@@ -97,7 +107,7 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, cfg *config.Config) ht
 			}
 		}
 
-		log.Info("request body decoded", slog.Any("decodedRequest", decodedRequest))
+		log.Info("request body was decoded", slog.Any("decodedRequest", decodedRequest))
 
 		if err := validator.New().Struct(decodedRequest); err != nil {
 			var validationErrs validator.ValidationErrors
@@ -108,7 +118,15 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, cfg *config.Config) ht
 			return
 		}
 
-		processedCode, err := processCode(decodedRequest.Code, decodedRequest.SkipsNumber)
+		programmingLaunguageId, err := skipsGenerator.GetProgrammingLanguageIDByName(decodedRequest.ProgrammingLanguage)
+		if err != nil {
+			log.Error("invalid programming language: "+decodedRequest.ProgrammingLanguage, sl.Err(err))
+			writer.WriteHeader(http.StatusBadRequest)
+			render.JSON(writer, request, getErrorResponse("invalid programming language: "+decodedRequest.ProgrammingLanguage))
+			return
+		}
+
+		processedCode, answers, err := processCode(decodedRequest.Code, decodedRequest.SkipsNumber)
 		if err != nil {
 			log.Error("failed to generate skips for code", sl.Err(err))
 			writer.WriteHeader(http.StatusInternalServerError)
@@ -116,16 +134,12 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, cfg *config.Config) ht
 			return
 		}
 
-		isValidAlias := false
+		aliasExistsInDb := true
 		alias := ""
-		for !isValidAlias {
+		for aliasExistsInDb {
 			alias = generateAlias(cfg.AliasLength)
-			_, err := skipsGenerator.GetSkipsCode(alias)
-			if errors.Is(err, storage.ErrCodeNotFound) { // this alias is free
-				isValidAlias = true
-				break
-			}
-			if err != nil { // some other error occurred
+			aliasExistsInDb, err = aliasChecker.CheckAliasExist(alias)
+			if err != nil {
 				log.Error("failed to check alias "+alias+" existence in db", sl.Err(err))
 				writer.WriteHeader(http.StatusInternalServerError)
 				render.JSON(writer, request, getErrorResponse("failed to check alias existence in db"))
@@ -133,7 +147,12 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, cfg *config.Config) ht
 			}
 		}
 
-		id, err := skipsGenerator.SaveSkipsCode(decodedRequest.Code, decodedRequest.SkipsNumber, alias)
+		taskId, aliasId, err := skipsGenerator.SaveSkipsCodeWithAlias(
+			processedCode,
+			answers,
+			programmingLaunguageId,
+			alias,
+		)
 		if err != nil {
 			log.Error("error while saving skips code", sl.Err(err))
 			writer.WriteHeader(http.StatusInternalServerError)
@@ -141,13 +160,14 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, cfg *config.Config) ht
 			return
 		}
 
-		log.Info("task saved to db", slog.Int64("_id", id))
+		log.Info("task saved to db", slog.Int64("_id", taskId))
+		log.Info("alias saved to db", slog.Int64("_id", aliasId))
 		writer.WriteHeader(http.StatusOK)
 		render.JSON(writer, request, getOKResponse(processedCode, alias))
 	}
 }
 
-func processCode(code string, number int) (string, error) {
+func processCode(code string, number int) (string, []string, error) {
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	model := "meta-llama/llama-4-scout:free"
 	temperature := 0.7
@@ -164,13 +184,13 @@ func processCode(code string, number int) (string, error) {
 		log.Fatalf("System prompt not found in the YAML file")
 	}
 
-	response, err := client.SendChat(systemPrompt, code)
+	response, err := client.SendChat(systemPrompt, "Число пропусков = "+strconv.Itoa(number)+"\n"+code)
 	if err != nil {
 		log.Fatalf("Error sending request: %v", err)
 	}
 	fmt.Println("Response from OpenRouter:", response)
 
-	return response, nil
+	return response, []string{"test answer, #todo"}, nil //todo fix
 }
 
 func generateAlias(length int) string {

@@ -3,6 +3,7 @@ package main
 import (
 	_ "codium-backend/docs" // Import generated Swagger docs
 	"codium-backend/internal/config"
+	"codium-backend/internal/http_server/handlers/get_task"
 	"codium-backend/internal/http_server/handlers/skips"
 	"codium-backend/internal/storage/postgresql"
 	"codium-backend/lib/logger/handlers/slogpretty"
@@ -72,7 +73,8 @@ func main() {
 
 	// Mount API routes under /api/v1
 	router.Route("/api/v1", func(r chi.Router) {
-		r.Post("/skips/generate", skips.New(logger, storage, cfg))
+		r.Post("/skips/generate", skips.New(logger, storage, storage, cfg))
+		r.Get("/tasks/{alias}", get_task.New(logger, storage))
 	})
 
 	logger.Info("starting server", slog.String("address", cfg.HTTPServer.Address))
