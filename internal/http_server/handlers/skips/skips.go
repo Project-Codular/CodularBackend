@@ -7,6 +7,7 @@ import (
 	"codium-backend/lib/logger/sl"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/go-chi/chi/v5/middleware"
@@ -30,6 +31,11 @@ type Response struct {
 	ResponseInfo    response_info.ResponseInfo `json:"responseInfo"`
 	ProcessedCode   string                     `json:"processedCode"`
 	ProcessedCodeId string                     `json:"processedCodeId"`
+}
+
+type LLMResponse struct {
+	SkipsCode string   `json:"skipsCode"`
+	Answers   []string `json:"answers"`
 }
 
 //go:generate go run github.com/vektra/mockery/v2@v2.53.3 --name=SkipsGenerator
@@ -126,7 +132,7 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, aliasChecker AliasChec
 			return
 		}
 
-		processedCode, answers, err := processCode(decodedRequest.Code, decodedRequest.SkipsNumber)
+		processedCode, answers, err := processCode(decodedRequest.Code, decodedRequest.SkipsNumber, log)
 		if err != nil {
 			log.Error("failed to generate skips for code", sl.Err(err))
 			writer.WriteHeader(http.StatusInternalServerError)
@@ -167,9 +173,9 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, aliasChecker AliasChec
 	}
 }
 
-func processCode(code string, number int) (string, []string, error) {
+func processCode(code string, number int, logger *slog.Logger) (string, []string, error) {
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
-	model := "meta-llama/llama-4-scout:free"
+	model := "microsoft/mai-ds-r1:free"
 	temperature := 0.7
 
 	client := openRouterAPI.NewClient(apiKey, model, temperature)
@@ -179,7 +185,7 @@ func processCode(code string, number int) (string, []string, error) {
 		log.Fatalf("Error loading system prompts: %v", err)
 	}
 
-	systemPrompt, exists := prompts["omissions"]
+	systemPrompt, exists := prompts["system_prompt"]
 	if !exists {
 		log.Fatalf("System prompt not found in the YAML file")
 	}
@@ -190,7 +196,21 @@ func processCode(code string, number int) (string, []string, error) {
 	}
 	fmt.Println("Response from OpenRouter:", response)
 
-	return response, []string{"test answer, #todo"}, nil //todo fix
+	var decodedLLMResponse LLMResponse
+	err = json.Unmarshal([]byte(response), &decodedLLMResponse)
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			logger.Error("request body is empty")
+			return "", []string{}, fmt.Errorf("request body is empty")
+		} else {
+			logger.Error("failed to decode request body", sl.Err(err))
+			return "", []string{}, fmt.Errorf("request body is empty")
+		}
+	}
+
+	logger.Info("LLM response body was decoded", slog.Any("decodedLLMResponse", decodedLLMResponse))
+
+	return decodedLLMResponse.SkipsCode, decodedLLMResponse.Answers, nil
 }
 
 func generateAlias(length int) string {
