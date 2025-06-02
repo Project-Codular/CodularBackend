@@ -1,4 +1,51 @@
 basePath: /api/v1
+definitions:
+  get_task.Response:
+    properties:
+      codeToSolve:
+        type: string
+      responseInfo:
+        $ref: '#/definitions/response_info.ResponseInfo'
+    type: object
+  response_info.ResponseInfo:
+    properties:
+      error:
+        type: string
+      status:
+        type: string
+    type: object
+  skips.Request:
+    properties:
+      programmingLanguage:
+        type: string
+      skipsNumber:
+        minimum: 0
+        type: integer
+      sourceCode:
+        type: string
+    required:
+    - programmingLanguage
+    - skipsNumber
+    - sourceCode
+    type: object
+  skips.Response:
+    properties:
+      responseInfo:
+        $ref: '#/definitions/response_info.ResponseInfo'
+      taskAlias:
+        type: string
+    type: object
+  task_status.StatusResponse:
+    properties:
+      error:
+        type: string
+      message:
+        type: string
+      result:
+        type: string
+      status:
+        type: string
+    type: object
 host: localhost:8082
 info:
   contact:
@@ -13,5 +60,98 @@ info:
   termsOfService: http://swagger.io/terms/
   title: Codular API
   version: "1.0"
-paths: {}
+paths:
+  /skips/generate:
+    post:
+      consumes:
+      - application/json
+      description: Processes the provided source code with a specified number of skips,
+        generates a unique alias, and saves initial status to Redis. Returns the task
+        alias for status checking.
+      parameters:
+      - description: Source code, number of skips, and programming language
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/skips.Request'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Example response" Example({"responseInfo":{"status":"OK"},"taskAlias":"abc123"})
+          schema:
+            $ref: '#/definitions/skips.Response'
+        "400":
+          description: Invalid request or empty body
+          schema:
+            $ref: '#/definitions/skips.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/skips.Response'
+      summary: Generate and save skips for code
+      tags:
+      - Skips
+  /task-status/{alias}:
+    get:
+      description: Returns the current status of a task by its alias.
+      parameters:
+      - description: Task alias
+        in: path
+        name: alias
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Example response" Example({"status":"Done","result":"processed
+            code"})
+          schema:
+            $ref: '#/definitions/task_status.StatusResponse'
+        "400":
+          description: Alias parameter is missing
+          schema:
+            $ref: '#/definitions/task_status.StatusResponse'
+        "404":
+          description: Task not found
+          schema:
+            $ref: '#/definitions/task_status.StatusResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/task_status.StatusResponse'
+      summary: Get task status
+      tags:
+      - Skips
+  /tasks/{alias}:
+    get:
+      description: Retrieves the processed code associated with the given alias from
+        the database.
+      parameters:
+      - description: Task alias
+        in: path
+        name: alias
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Example response" Example({"responseInfo":{"status":"OK"},"codeToSolve":"processed
+            code"})
+          schema:
+            $ref: '#/definitions/get_task.Response'
+        "400":
+          description: Task alias is empty
+          schema:
+            $ref: '#/definitions/get_task.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/get_task.Response'
+      summary: Get task by alias
+      tags:
+      - Tasks
 swagger: "2.0"

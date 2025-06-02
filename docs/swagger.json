@@ -17,5 +17,212 @@
     },
     "host": "localhost:8082",
     "basePath": "/api/v1",
-    "paths": {}
+    "paths": {
+        "/skips/generate": {
+            "post": {
+                "description": "Processes the provided source code with a specified number of skips, generates a unique alias, and saves initial status to Redis. Returns the task alias for status checking.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Skips"
+                ],
+                "summary": "Generate and save skips for code",
+                "parameters": [
+                    {
+                        "description": "Source code, number of skips, and programming language",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/skips.Request"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Example response\" Example({\"responseInfo\":{\"status\":\"OK\"},\"taskAlias\":\"abc123\"})",
+                        "schema": {
+                            "$ref": "#/definitions/skips.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or empty body",
+                        "schema": {
+                            "$ref": "#/definitions/skips.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/skips.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/task-status/{alias}": {
+            "get": {
+                "description": "Returns the current status of a task by its alias.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Skips"
+                ],
+                "summary": "Get task status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task alias",
+                        "name": "alias",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Example response\" Example({\"status\":\"Done\",\"result\":\"processed code\"})",
+                        "schema": {
+                            "$ref": "#/definitions/task_status.StatusResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Alias parameter is missing",
+                        "schema": {
+                            "$ref": "#/definitions/task_status.StatusResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Task not found",
+                        "schema": {
+                            "$ref": "#/definitions/task_status.StatusResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/task_status.StatusResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/tasks/{alias}": {
+            "get": {
+                "description": "Retrieves the processed code associated with the given alias from the database.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "Get task by alias",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task alias",
+                        "name": "alias",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Example response\" Example({\"responseInfo\":{\"status\":\"OK\"},\"codeToSolve\":\"processed code\"})",
+                        "schema": {
+                            "$ref": "#/definitions/get_task.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Task alias is empty",
+                        "schema": {
+                            "$ref": "#/definitions/get_task.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/get_task.Response"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "get_task.Response": {
+            "type": "object",
+            "properties": {
+                "codeToSolve": {
+                    "type": "string"
+                },
+                "responseInfo": {
+                    "$ref": "#/definitions/response_info.ResponseInfo"
+                }
+            }
+        },
+        "response_info.ResponseInfo": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "skips.Request": {
+            "type": "object",
+            "required": [
+                "programmingLanguage",
+                "skipsNumber",
+                "sourceCode"
+            ],
+            "properties": {
+                "programmingLanguage": {
+                    "type": "string"
+                },
+                "skipsNumber": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "sourceCode": {
+                    "type": "string"
+                }
+            }
+        },
+        "skips.Response": {
+            "type": "object",
+            "properties": {
+                "responseInfo": {
+                    "$ref": "#/definitions/response_info.ResponseInfo"
+                },
+                "taskAlias": {
+                    "type": "string"
+                }
+            }
+        },
+        "task_status.StatusResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "result": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        }
+    }
 }
