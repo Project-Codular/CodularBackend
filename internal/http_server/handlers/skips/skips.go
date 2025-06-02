@@ -29,9 +29,8 @@ type Request struct {
 }
 
 type Response struct {
-	ResponseInfo    response_info.ResponseInfo `json:"responseInfo"`
-	ProcessedCode   string                     `json:"processedCode"`
-	ProcessedCodeId string                     `json:"processedCodeId"`
+	ResponseInfo response_info.ResponseInfo `json:"responseInfo"`
+	TaskAlias    string                     `json:"taskAlias"`
 }
 
 type LLMResponse struct {
@@ -52,6 +51,27 @@ type TasksProvider interface {
 
 type AliasChecker interface {
 	CheckAliasExist(alias string) (bool, error)
+}
+
+func getErrorResponse(msg string) *Response {
+	return &Response{
+		ResponseInfo: response_info.Error(msg),
+		TaskAlias:    "",
+	}
+}
+
+func getValidationErrorResponse(validationErrors validator.ValidationErrors) *Response {
+	return &Response{
+		ResponseInfo: response_info.ValidationError(validationErrors),
+		TaskAlias:    "",
+	}
+}
+
+func getOKResponse(taskAlias string) *Response {
+	return &Response{
+		ResponseInfo: response_info.OK(),
+		TaskAlias:    taskAlias,
+	}
 }
 
 // New generates skips for the provided code and saves initial status to Redis
@@ -80,12 +100,12 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, aliasChecker AliasChec
 			if errors.Is(err, io.EOF) {
 				log.Error("request body is empty")
 				writer.WriteHeader(http.StatusBadRequest)
-				render.JSON(writer, request, response_info.Error("empty request"))
+				render.JSON(writer, request, getErrorResponse("empty request"))
 				return
 			} else {
 				log.Error("failed to decode request body", sl.Err(err))
 				writer.WriteHeader(http.StatusInternalServerError)
-				render.JSON(writer, request, response_info.Error("failed to decode request"))
+				render.JSON(writer, request, getErrorResponse("failed to decode request"))
 				return
 			}
 		}
@@ -97,7 +117,7 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, aliasChecker AliasChec
 			if errors.As(err, &validationErrs) {
 				log.Error("invalid request", sl.Err(err))
 				writer.WriteHeader(http.StatusBadRequest)
-				render.JSON(writer, request, response_info.ValidationError(validationErrs))
+				render.JSON(writer, request, getValidationErrorResponse(validationErrs))
 				return
 			}
 		}
@@ -106,7 +126,7 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, aliasChecker AliasChec
 		if err != nil {
 			log.Error("invalid programming language: "+decodedRequest.ProgrammingLanguage, sl.Err(err))
 			writer.WriteHeader(http.StatusBadRequest)
-			render.JSON(writer, request, response_info.Error("invalid programming language: "+decodedRequest.ProgrammingLanguage))
+			render.JSON(writer, request, getErrorResponse("invalid programming language: "+decodedRequest.ProgrammingLanguage))
 			return
 		}
 
@@ -119,7 +139,7 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, aliasChecker AliasChec
 			if err != nil {
 				log.Error("failed to check alias "+alias+" existence in db", sl.Err(err))
 				writer.WriteHeader(http.StatusInternalServerError)
-				render.JSON(writer, request, response_info.Error("failed to check alias existence in db"))
+				render.JSON(writer, request, getErrorResponse("failed to check alias existence in db"))
 				return
 			}
 		}
@@ -129,13 +149,13 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, aliasChecker AliasChec
 		if err := database.DB.SetTaskStatus(alias, initialStatus); err != nil {
 			log.Error("failed to set initial status in Redis", sl.Err(err))
 			writer.WriteHeader(http.StatusInternalServerError)
-			render.JSON(writer, request, response_info.Error("internal server error"))
+			render.JSON(writer, request, getErrorResponse("internal server error"))
 			return
 		}
 
 		// Отправка "OK" клиенту
 		writer.WriteHeader(http.StatusOK)
-		render.JSON(writer, request, response_info.OK())
+		render.JSON(writer, request, getOKResponse(alias))
 
 		// Асинхронная обработка
 		go processTaskAsync(log, alias, alias, decodedRequest.Code, decodedRequest.SkipsNumber, programmingLanguageId, skipsGenerator)
