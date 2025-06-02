@@ -184,11 +184,11 @@ func (s *Storage) GetCodeAnswers(codeAlias string) ([]string, error) {
 
 func New(cfg *config.Config) error {
 	// Чтение PostgreSQL настроек из .env
-	pgUser := os.Getenv("POSTGRES_USER")
-	pgPassword := os.Getenv("POSTGRES_USER_PASSWORD")
+	pgUser := os.Getenv("POSTGRES_ADMIN_USER")
+	pgPassword := os.Getenv("POSTGRES_ADMIN_PASSWORD")
 	pgHost := os.Getenv("POSTGRES_HOST_NAME")
 	pgPort := os.Getenv("POSTGRES_PORT")
-	pgName := os.Getenv("POSTGRES_DB_NAME")
+	pgName := os.Getenv("POSTGRES_DB")
 
 	if pgUser == "" || pgPassword == "" || pgHost == "" || pgPort == "" || pgName == "" {
 		return fmt.Errorf("missing required PostgreSQL environment variables")
