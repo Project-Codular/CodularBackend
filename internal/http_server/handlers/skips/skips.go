@@ -76,12 +76,13 @@ func getOKResponse(taskAlias string) *Response {
 
 // New generates skips for the provided code and saves initial status to Redis
 // @Summary Generate and save skips for code
-// @Description Processes the provided source code with a specified number of skips, generates a unique alias, and saves initial status to Redis.
+// @Description Processes the provided source code with a specified number of skips, generates a unique alias, and saves initial status to Redis. Returns the task alias for status checking.
 // @Tags Skips
 // @Accept json
 // @Produce json
-// @Param request body Request true "Source code and number of skips"
-// @Success 200 {object} Response "Successfully initiated skips generation"
+// @Param request body Request true "Source code, number of skips, and programming language"
+// @Success 200 {object} Response "Successfully initiated skips generation with task alias"
+// @Success 200 {object} Response "Example response" Example({"responseInfo":{"status":"OK"},"taskAlias":"abc123"})
 // @Failure 400 {object} Response "Invalid request or empty body"
 // @Failure 500 {object} Response "Internal server error"
 // @Router /skips/generate [post]

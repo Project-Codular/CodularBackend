@@ -26,6 +26,7 @@ type StatusResponse struct {
 // @Produce json
 // @Param alias path string true "Task alias"
 // @Success 200 {object} StatusResponse "Task status retrieved successfully"
+// @Success 200 {object} StatusResponse "Example response" Example({"status":"Done","result":"processed code"})
 // @Failure 400 {object} StatusResponse "Alias parameter is missing"
 // @Failure 404 {object} StatusResponse "Task not found"
 // @Failure 500 {object} StatusResponse "Internal server error"

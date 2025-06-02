@@ -30,6 +30,17 @@ func getOKResponse(codeToSolve string) *Response {
 	}
 }
 
+// New retrieves a task by alias
+// @Summary Get task by alias
+// @Description Retrieves the processed code associated with the given alias from the database.
+// @Tags Tasks
+// @Produce json
+// @Param alias path string true "Task alias"
+// @Success 200 {object} Response "Successfully retrieved task"
+// @Success 200 {object} Response "Example response" Example({"responseInfo":{"status":"OK"},"codeToSolve":"processed code"})
+// @Failure 400 {object} Response "Task alias is empty"
+// @Failure 500 {object} Response "Internal server error"
+// @Router /tasks/{alias} [get]
 func New(logger *slog.Logger, storage *database.Storage) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		const functionPath = "internal.http_server.handlers.get_task.New"
