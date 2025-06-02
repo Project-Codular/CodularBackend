@@ -1,7 +1,7 @@
 package get_task
 
 import (
-	"codium-backend/internal/storage/postgresql"
+	"codium-backend/internal/storage/database"
 	response_info "codium-backend/lib/api/response"
 	"codium-backend/lib/logger/sl"
 	"github.com/go-chi/chi/v5"
@@ -30,7 +30,7 @@ func getOKResponse(codeToSolve string) *Response {
 	}
 }
 
-func New(logger *slog.Logger, storage *postgresql.Storage) http.HandlerFunc {
+func New(logger *slog.Logger, storage *database.Storage) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		const functionPath = "internal.http_server.handlers.get_task.New"
 

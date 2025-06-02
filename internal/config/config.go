@@ -16,11 +16,10 @@ const (
 )
 
 type Config struct {
-	Env           string        `yaml:"env" env-default:"local"`
-	StoragePath   string        `yaml:"storage_path" env_required:"true"`
-	DBCredentials DBCredentials `yaml:"db_credentials"`
-	HTTPServer    HTTPServer    `yaml:"http_server"`
-	AliasLength   int           `yaml:"alias_length"`
+	Env         string     `yaml:"env" env-default:"local"`
+	StoragePath string     `yaml:"storage_path" env-required:"true"`
+	HTTPServer  HTTPServer `yaml:"http_server"`
+	AliasLength int        `yaml:"alias_length"`
 }
 
 type HTTPServer struct {
@@ -30,13 +29,14 @@ type HTTPServer struct {
 }
 
 type DBCredentials struct {
-	SuperUser         string `yaml:"super_user" env_required:"true"`
-	SuperUserPassword string `yaml:"super_user_password" env_required:"true"`
-	Name              string `yaml:"name" env_required:"true"`
-	User              string `yaml:"user" env_required:"true"`
-	Password          string `yaml:"password" env_required:"true"`
-	Port              int    `yaml:"port" env-default:"5432"`
-	HostName          string `yaml:"host_name" env-default:"localhost"`
+	Postgres PostgresCredentials
+	Redis    RedisCredentials
+}
+
+type PostgresCredentials struct {
+}
+
+type RedisCredentials struct {
 }
 
 func MustLoad() *Config {
@@ -51,7 +51,7 @@ func MustLoad() *Config {
 	}
 
 	if _, err := os.Stat(configPath); errors.Is(err, fs.ErrNotExist) {
-		log.Fatalf("No config file exists on path scecified: %s", err)
+		log.Fatalf("No config file exists on path specified: %s", err)
 	}
 
 	var cfg Config

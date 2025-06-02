@@ -1,21 +1,62 @@
-package postgresql
+package database
 
 import (
 	"codium-backend/internal/config"
 	"codium-backend/internal/storage"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/go-redis/redis/v8"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"strconv"
+	"log"
+	"os"
 	"time"
 )
 
 var DB *Storage
 
 type Storage struct {
-	db *pgxpool.Pool
+	db  *pgxpool.Pool
+	rdb *redis.Client
+}
+
+type TaskStatus struct {
+	Status string `json:"status"`
+	Result string `json:"result,omitempty"`
+	Error  string `json:"error,omitempty"`
+}
+
+// SetTaskStatus устанавливает статус задачи в Redis по алиасу
+func (s *Storage) SetTaskStatus(alias string, status TaskStatus) error {
+	statusKey := fmt.Sprintf("task_status:%s", alias)
+	statusData, err := json.Marshal(status)
+	if err != nil {
+		return fmt.Errorf("failed to marshal status: %v", err)
+	}
+	if err := s.rdb.HSet(context.Background(), statusKey, "data", statusData).Err(); err != nil {
+		return fmt.Errorf("failed to set status in Redis: %v", err)
+	}
+	return nil
+}
+
+// GetTaskStatus возвращает статус задачи из Redis по алиасу
+func (s *Storage) GetTaskStatus(alias string) (TaskStatus, error) {
+	statusKey := fmt.Sprintf("task_status:%s", alias)
+	cachedStatus, err := s.rdb.HGet(context.Background(), statusKey, "data").Result()
+	if err == redis.Nil {
+		return TaskStatus{}, fmt.Errorf("task status not found for alias: %s", alias)
+	}
+	if err != nil {
+		return TaskStatus{}, fmt.Errorf("failed to get status from Redis: %v", err)
+	}
+
+	var status TaskStatus
+	if err := json.Unmarshal([]byte(cachedStatus), &status); err != nil {
+		return TaskStatus{}, fmt.Errorf("failed to unmarshal status: %v", err)
+	}
+	return status, nil
 }
 
 func (s *Storage) SaveSkipsCodeWithAlias(skipsCode string, answers []string, programmingLanguageId int64, alias string) (int64, int64, error) {
@@ -142,12 +183,19 @@ func (s *Storage) GetCodeAnswers(codeAlias string) ([]string, error) {
 }
 
 func New(cfg *config.Config) error {
-	dsn := "postgres://" +
-		cfg.DBCredentials.User + ":" +
-		cfg.DBCredentials.Password + "@" +
-		cfg.DBCredentials.HostName + ":" +
-		strconv.Itoa(cfg.DBCredentials.Port) + "/" +
-		cfg.DBCredentials.Name + "?sslmode=disable&timezone=UTC" // todo change for prod (when have SSL/TLS cert)
+	// Чтение PostgreSQL настроек из .env
+	pgUser := os.Getenv("POSTGRES_USER")
+	pgPassword := os.Getenv("POSTGRES_USER_PASSWORD")
+	pgHost := os.Getenv("POSTGRES_HOST_NAME")
+	pgPort := os.Getenv("POSTGRES_PORT")
+	pgName := os.Getenv("POSTGRES_DB_NAME")
+
+	if pgUser == "" || pgPassword == "" || pgHost == "" || pgPort == "" || pgName == "" {
+		return fmt.Errorf("missing required PostgreSQL environment variables")
+	}
+
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable&timezone=UTC",
+		pgUser, pgPassword, pgHost, pgPort, pgName)
 
 	pool, err := pgxpool.New(context.Background(), dsn)
 	if err != nil {
@@ -160,13 +208,44 @@ func New(cfg *config.Config) error {
 		return fmt.Errorf("unable to ping database: %v", err)
 	}
 
-	DB = &Storage{db: pool}
+	// Чтение Redis настроек из .env
+	redisHost := os.Getenv("REDIS_HOSTNAME")
+	redisPort := os.Getenv("REDIS_PORT")
+	redisPassword := os.Getenv("REDIS_PASSWORD")
+
+	if redisHost == "" || redisPort == "" {
+		pool.Close()
+		return fmt.Errorf("missing required Redis environment variables")
+	}
+
+	redisAddr := fmt.Sprintf("%s:%s", redisHost, redisPort)
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     redisAddr,
+		Password: redisPassword,
+		DB:       0,
+	})
+
+	if err := rdb.Ping(context.Background()).Err(); err != nil {
+		pool.Close()
+		return fmt.Errorf("unable to connect to Redis: %v", err)
+	}
+
+	DB = &Storage{db: pool, rdb: rdb}
 	return nil
 }
 
 func CloseDB() {
 	if DB != nil {
-		DB.db.Close()
-		fmt.Println("Database connection closed.")
+		if DB.db != nil {
+			DB.db.Close()
+		}
+		if DB.rdb != nil {
+			err := DB.rdb.Close()
+			if err != nil {
+				log.Fatalf("Error closing redis db: %s", err)
+				return
+			}
+		}
+		fmt.Println("Database and Redis connections closed.")
 	}
 }

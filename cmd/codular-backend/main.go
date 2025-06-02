@@ -5,7 +5,8 @@ import (
 	"codium-backend/internal/config"
 	"codium-backend/internal/http_server/handlers/get_task"
 	"codium-backend/internal/http_server/handlers/skips"
-	"codium-backend/internal/storage/postgresql"
+	"codium-backend/internal/http_server/handlers/task_status"
+	"codium-backend/internal/storage/database"
 	"codium-backend/lib/logger/handlers/slogpretty"
 	"fmt"
 	"github.com/go-chi/chi/v5"
@@ -45,14 +46,14 @@ func main() {
 	logger.Info("Starting Codular backend", slog.String("env", cfg.Env))
 	logger.Debug("Debug messages are enabled")
 
-	err := postgresql.New(cfg)
+	err := database.New(cfg)
 	if err != nil {
 		logger.Error(fmt.Sprintf("Error while initializing DB: %s", err))
 		log.Fatalf("Failed to init DB: %s", err)
 		return
 	}
-	storage := postgresql.DB
-	defer postgresql.CloseDB()
+	storage := database.DB
+	defer database.CloseDB()
 
 	router := chi.NewRouter()
 
@@ -74,7 +75,8 @@ func main() {
 	// Mount API routes under /api/v1
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Post("/skips/generate", skips.New(logger, storage, storage, cfg))
-		r.Get("/tasks/{alias}", get_task.New(logger, storage))
+		r.Get("/task/{alias}", get_task.New(logger, storage))
+		r.Get("/task-status/{alias}", task_status.GetTaskStatus(logger))
 	})
 
 	logger.Info("starting server", slog.String("address", cfg.HTTPServer.Address))

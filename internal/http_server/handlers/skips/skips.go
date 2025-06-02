@@ -2,6 +2,7 @@ package skips
 
 import (
 	"codium-backend/internal/config"
+	database "codium-backend/internal/storage/database"
 	openRouterAPI "codium-backend/lib/api/openrouter"
 	response_info "codium-backend/lib/api/response"
 	"codium-backend/lib/logger/sl"
@@ -53,38 +54,14 @@ type AliasChecker interface {
 	CheckAliasExist(alias string) (bool, error)
 }
 
-func getErrorResponse(msg string) *Response {
-	return &Response{
-		ResponseInfo:    response_info.Error(msg),
-		ProcessedCode:   "",
-		ProcessedCodeId: "",
-	}
-}
-
-func getValidationErrorResponse(validationErrors validator.ValidationErrors) *Response {
-	return &Response{
-		ResponseInfo:    response_info.ValidationError(validationErrors),
-		ProcessedCode:   "",
-		ProcessedCodeId: "",
-	}
-}
-
-func getOKResponse(processedCode string, processedCodeId string) *Response {
-	return &Response{
-		ResponseInfo:    response_info.OK(),
-		ProcessedCode:   processedCode,
-		ProcessedCodeId: processedCodeId,
-	}
-}
-
-// New generates skips for the provided code and saves it to the database.
+// New generates skips for the provided code and saves initial status to Redis
 // @Summary Generate and save skips for code
-// @Description Processes the provided source code with a specified number of skips, generates a unique alias, and saves it to the database.
+// @Description Processes the provided source code with a specified number of skips, generates a unique alias, and saves initial status to Redis.
 // @Tags Skips
 // @Accept json
 // @Produce json
 // @Param request body Request true "Source code and number of skips"
-// @Success 200 {object} Response "Successfully generated and saved skips"
+// @Success 200 {object} Response "Successfully initiated skips generation"
 // @Failure 400 {object} Response "Invalid request or empty body"
 // @Failure 500 {object} Response "Internal server error"
 // @Router /skips/generate [post]
@@ -103,12 +80,12 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, aliasChecker AliasChec
 			if errors.Is(err, io.EOF) {
 				log.Error("request body is empty")
 				writer.WriteHeader(http.StatusBadRequest)
-				render.JSON(writer, request, getErrorResponse("empty request"))
+				render.JSON(writer, request, response_info.Error("empty request"))
 				return
 			} else {
 				log.Error("failed to decode request body", sl.Err(err))
 				writer.WriteHeader(http.StatusInternalServerError)
-				render.JSON(writer, request, getErrorResponse("failed to decode request"))
+				render.JSON(writer, request, response_info.Error("failed to decode request"))
 				return
 			}
 		}
@@ -117,59 +94,85 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, aliasChecker AliasChec
 
 		if err := validator.New().Struct(decodedRequest); err != nil {
 			var validationErrs validator.ValidationErrors
-			errors.As(err, &validationErrs)
-			log.Error("invalid request", sl.Err(err))
-			writer.WriteHeader(http.StatusBadRequest)
-			render.JSON(writer, request, getValidationErrorResponse(validationErrs))
-			return
+			if errors.As(err, &validationErrs) {
+				log.Error("invalid request", sl.Err(err))
+				writer.WriteHeader(http.StatusBadRequest)
+				render.JSON(writer, request, response_info.ValidationError(validationErrs))
+				return
+			}
 		}
 
-		programmingLaunguageId, err := skipsGenerator.GetProgrammingLanguageIDByName(decodedRequest.ProgrammingLanguage)
+		programmingLanguageId, err := skipsGenerator.GetProgrammingLanguageIDByName(decodedRequest.ProgrammingLanguage)
 		if err != nil {
 			log.Error("invalid programming language: "+decodedRequest.ProgrammingLanguage, sl.Err(err))
 			writer.WriteHeader(http.StatusBadRequest)
-			render.JSON(writer, request, getErrorResponse("invalid programming language: "+decodedRequest.ProgrammingLanguage))
+			render.JSON(writer, request, response_info.Error("invalid programming language: "+decodedRequest.ProgrammingLanguage))
 			return
 		}
 
-		processedCode, answers, err := processCode(decodedRequest.Code, decodedRequest.SkipsNumber, log)
-		if err != nil {
-			log.Error("failed to generate skips for code", sl.Err(err))
-			writer.WriteHeader(http.StatusInternalServerError)
-			render.JSON(writer, request, getErrorResponse("failed to generate skips for code"))
-			return
-		}
-
+		// Генерация уникального алиаса
 		aliasExistsInDb := true
-		alias := ""
+		var alias string
 		for aliasExistsInDb {
 			alias = generateAlias(cfg.AliasLength)
 			aliasExistsInDb, err = aliasChecker.CheckAliasExist(alias)
 			if err != nil {
 				log.Error("failed to check alias "+alias+" existence in db", sl.Err(err))
 				writer.WriteHeader(http.StatusInternalServerError)
-				render.JSON(writer, request, getErrorResponse("failed to check alias existence in db"))
+				render.JSON(writer, request, response_info.Error("failed to check alias existence in db"))
 				return
 			}
 		}
 
-		taskId, aliasId, err := skipsGenerator.SaveSkipsCodeWithAlias(
-			processedCode,
-			answers,
-			programmingLaunguageId,
-			alias,
-		)
-		if err != nil {
-			log.Error("error while saving skips code", sl.Err(err))
+		// Сохранение начального статуса "Processing" в Redis
+		initialStatus := database.TaskStatus{Status: "Processing"}
+		if err := database.DB.SetTaskStatus(alias, initialStatus); err != nil {
+			log.Error("failed to set initial status in Redis", sl.Err(err))
 			writer.WriteHeader(http.StatusInternalServerError)
-			render.JSON(writer, request, getErrorResponse("server error while saving code with skips"))
+			render.JSON(writer, request, response_info.Error("internal server error"))
 			return
 		}
 
-		log.Info("task saved to db", slog.Int64("_id", taskId))
-		log.Info("alias saved to db", slog.Int64("_id", aliasId))
+		// Отправка "OK" клиенту
 		writer.WriteHeader(http.StatusOK)
-		render.JSON(writer, request, getOKResponse(processedCode, alias))
+		render.JSON(writer, request, response_info.OK())
+
+		// Асинхронная обработка
+		go processTaskAsync(log, alias, alias, decodedRequest.Code, decodedRequest.SkipsNumber, programmingLanguageId, skipsGenerator)
+
+		log.Info("task processing initiated", slog.String("task_alias", alias))
+	}
+}
+
+// processTaskAsync асинхронно обрабатывает задачу и сохраняет результат
+func processTaskAsync(log *slog.Logger, taskAlias string, alias, code string, skipsNumber int, programmingLanguageId int64, skipsGenerator SkipsGenerator) {
+	log = log.With(slog.String("task_alias", taskAlias))
+
+	processedCode, answers, err := processCode(code, skipsNumber, log)
+	if err != nil {
+		// Обновление статуса на "Error" в случае ошибки
+		errorStatus := database.TaskStatus{Status: "Error", Error: err.Error()}
+		if err := database.DB.SetTaskStatus(alias, errorStatus); err != nil {
+			log.Error("failed to set error status in Redis", sl.Err(err))
+		}
+		return
+	}
+
+	// Сохранение в PostgreSQL
+	_, _, err = skipsGenerator.SaveSkipsCodeWithAlias(processedCode, answers, programmingLanguageId, alias)
+	if err != nil {
+		// Обновление статуса на "Error" в случае ошибки сохранения
+		errorStatus := database.TaskStatus{Status: "Error", Error: fmt.Sprintf("failed to save task: %v", err)}
+		if err := database.DB.SetTaskStatus(alias, errorStatus); err != nil {
+			log.Error("failed to set error status in Redis", sl.Err(err))
+		}
+		return
+	}
+
+	// Обновление статуса на "Done" при успехе
+	doneStatus := database.TaskStatus{Status: "Done", Result: processedCode}
+	if err := database.DB.SetTaskStatus(alias, doneStatus); err != nil {
+		log.Error("failed to set done status in Redis", sl.Err(err))
 	}
 }
 
