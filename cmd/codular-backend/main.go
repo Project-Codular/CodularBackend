@@ -26,7 +26,7 @@ const (
 
 // @title Codular API
 // @version 1.0
-// @description API for the Codular project, providing functionality to generate and manage code skips.
+// @description API for the Codular project, providing functionality to generate code skips, retrieve tasks, and check task status.
 // @termsOfService http://swagger.io/terms/
 
 // @contact.name API Support
