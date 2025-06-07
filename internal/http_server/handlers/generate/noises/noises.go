@@ -34,8 +34,7 @@ type Response struct {
 }
 
 type LLMResponse struct {
-	NoisedCode string   `json:"noisedCode"`
-	Answers    []string `json:"answers"`
+	NoisedCode string `json:"noiseCode"`
 }
 
 //go:generate go run github.com/vektra/mockery/v2@v2.53.3 --name=NoisesGenerator
@@ -226,13 +225,13 @@ func processCode(code string, noiseLevel int, logger *slog.Logger) (string, []st
 			return "", []string{}, fmt.Errorf("request body is empty")
 		} else {
 			logger.Error("failed to decode request body", sl.Err(err))
-			return "", []string{}, fmt.Errorf("request body is empty")
+			return "", []string{}, err
 		}
 	}
 
 	logger.Info("LLM response body was decoded", slog.Any("decodedLLMResponse", decodedLLMResponse))
 
-	return decodedLLMResponse.NoisedCode, decodedLLMResponse.Answers, nil
+	return decodedLLMResponse.NoisedCode, []string{code}, nil
 }
 
 func generateAlias(length int) string {
