@@ -46,6 +46,15 @@ type Response struct {
 	Choices []Choice `json:"choices"`
 }
 
+// cleanLLMResponse удаляет Markdown-форматирование из ответа OpenRouter
+func CleanLLMResponse(response string) string {
+	// Удаляем ```json и ```, а также лишние пробелы и переносы строк
+	trimmed := strings.TrimSpace(response)
+	trimmed = strings.TrimPrefix(trimmed, "```json")
+	trimmed = strings.TrimSuffix(trimmed, "```")
+	return strings.TrimSpace(trimmed)
+}
+
 func (client *OpenRouterClient) SendChat(systemPrompt, userPrompt string, temperature ...float64) (string, error) {
 	temp := client.Temperature
 	if len(temperature) > 0 {

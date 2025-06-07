@@ -88,7 +88,7 @@ func getOKResponse(taskAlias string) *Response {
 // @Router /skips/generate [post]
 func New(log *slog.Logger, skipsGenerator SkipsGenerator, aliasChecker AliasChecker, cfg *config.Config) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		const functionPath = "internal.http_server.handlers.skips.New"
+		const functionPath = "internal.http_server.handlers.generate.skips.New"
 
 		log = log.With(
 			slog.String("function_path", functionPath),
@@ -221,14 +221,16 @@ func processCode(code string, number int, logger *slog.Logger) (string, []string
 	fmt.Println("Response from OpenRouter:", response)
 
 	var decodedLLMResponse LLMResponse
-	err = json.Unmarshal([]byte(response), &decodedLLMResponse)
+	cleanedResponse := openRouterAPI.CleanLLMResponse(response)
+	fmt.Println("Cleaned response from OpenRouter:", cleanedResponse)
+	err = json.Unmarshal([]byte(cleanedResponse), &decodedLLMResponse)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			logger.Error("request body is empty")
 			return "", []string{}, fmt.Errorf("request body is empty")
 		} else {
 			logger.Error("failed to decode request body", sl.Err(err))
-			return "", []string{}, fmt.Errorf("request body is empty")
+			return "", []string{}, fmt.Errorf(err.Error())
 		}
 	}
 

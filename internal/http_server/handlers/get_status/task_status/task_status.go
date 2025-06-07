@@ -33,7 +33,7 @@ type StatusResponse struct {
 // @Router /task-status/{alias} [get]
 func GetTaskStatus(log *slog.Logger) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		const functionPath = "internal.http_server.handlers.task_status.GetTaskStatus"
+		const functionPath = "internal.http_server.handlers.get_status.task_status.GetTaskStatus"
 
 		log = log.With(
 			slog.String("function_path", functionPath),

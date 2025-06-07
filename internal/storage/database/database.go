@@ -28,6 +28,12 @@ type TaskStatus struct {
 	Error  string `json:"error,omitempty"`
 }
 
+type SubmissionStatus struct {
+	Status string `json:"status"`
+	Result string `json:"result,omitempty"`
+	Error  string `json:"error,omitempty"`
+}
+
 // SetTaskStatus устанавливает статус задачи в Redis по алиасу
 func (s *Storage) SetTaskStatus(alias string, status TaskStatus) error {
 	statusKey := fmt.Sprintf("task_status:%s", alias)
@@ -180,6 +186,106 @@ func (s *Storage) GetCodeAnswers(codeAlias string) ([]string, error) {
 		return []string{}, fmt.Errorf("failed to get_task skips code: %v", err)
 	}
 	return answers, nil
+}
+
+func (s *Storage) SavePendingSubmission(taskAlias string, submissionCode []string) (int64, error) {
+	query := `
+        INSERT INTO submissions (task_alias, submission_code, status, hints)
+        VALUES ($1, $2, 'Pending', '{}')  -- Начальное значение hints - пустой массив
+        RETURNING id
+    `
+	var id int64
+	err := s.db.QueryRow(context.Background(), query, taskAlias, submissionCode).Scan(&id)
+	if err != nil {
+		return 0, fmt.Errorf("failed to save submission: %v", err)
+	}
+	return id, nil
+}
+
+func (s *Storage) GetSubmissionStatus(submissionID int64) (string, error) {
+	query := `
+        SELECT status
+        FROM submissions
+        WHERE id = $1
+    `
+	var status string
+	err := s.db.QueryRow(context.Background(), query, submissionID).Scan(&status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", fmt.Errorf("submission not found")
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to get submission status: %v", err)
+	}
+	return status, nil
+}
+
+// UpdateSubmissionStatusToFailed обновляет статус посылки на "Failed"
+func (s *Storage) UpdateSubmissionStatusToFailed(submissionID int64) error {
+	query := `
+        UPDATE submissions
+        SET status = 'Failed'
+        WHERE id = $1
+    `
+	result, err := s.db.Exec(context.Background(), query, submissionID)
+	if err != nil {
+		return fmt.Errorf("failed to update submission status to Failed: %v", err)
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("submission with ID %d not found", submissionID)
+	}
+	return nil
+}
+
+// UpdateSubmissionStatusToSuccess обновляет статус посылки на "Success"
+func (s *Storage) UpdateSubmissionStatusToSuccess(submissionID int64) error {
+	query := `
+        UPDATE submissions
+        SET status = 'Success'
+        WHERE id = $1
+    `
+	result, err := s.db.Exec(context.Background(), query, submissionID)
+	if err != nil {
+		return fmt.Errorf("failed to update submission status to Success: %v", err)
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("submission with ID %d not found", submissionID)
+	}
+	return nil
+}
+
+// UpdateSubmissionStatusToFailedWithHints обновляет статус посылки на "Failed" и устанавливает подсказки
+func (s *Storage) UpdateSubmissionStatusToFailedWithHints(submissionID int64, hints []string) error {
+	query := `
+        UPDATE submissions
+        SET status = 'Failed', hints = $2
+        WHERE id = $1
+    `
+	result, err := s.db.Exec(context.Background(), query, submissionID, hints)
+	if err != nil {
+		return fmt.Errorf("failed to update submission status to Failed with hints: %v", err)
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("submission with ID %d not found", submissionID)
+	}
+	return nil
+}
+
+// GetSubmissionHints возвращает подсказки посылки по её ID
+func (s *Storage) GetSubmissionHints(submissionID int64) ([]string, error) {
+	query := `
+        SELECT hints
+        FROM submissions
+        WHERE id = $1
+    `
+	var hints []string
+	err := s.db.QueryRow(context.Background(), query, submissionID).Scan(&hints)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("submission not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get submission hints: %v", err)
+	}
+	return hints, nil
 }
 
 func New(cfg *config.Config) error {
