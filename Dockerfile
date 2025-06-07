@@ -33,6 +33,7 @@ RUN sed -i 's/\r$//' /app/wait-for-it.sh && \
 COPY .env /app/.env
 COPY ./config/local.yaml /app/config/local.yaml
 COPY ./config/system_prompts.yaml /app/config/system_prompts.yaml
+COPY ./config/skips_check_prompt.yaml /app/config/skips_check_prompt.yaml
 
 # Expose the backend port
 EXPOSE 8082
