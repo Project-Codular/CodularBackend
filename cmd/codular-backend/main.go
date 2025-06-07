@@ -7,6 +7,7 @@ import (
 	"codium-backend/internal/http_server/handlers/get_status/submission_status"
 	"codium-backend/internal/http_server/handlers/get_status/task_status"
 	"codium-backend/internal/http_server/handlers/get_task"
+	"codium-backend/internal/http_server/handlers/noises"
 	"codium-backend/internal/http_server/handlers/solve/skips_check"
 	"codium-backend/internal/storage/database"
 	"codium-backend/lib/logger/handlers/slogpretty"
@@ -77,6 +78,7 @@ func main() {
 	// Mount API routes under /api/v1
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Post("/skips/generate", skips.New(logger, storage, storage, cfg))
+		r.Post("/noises/generate", noises.New(logger, storage, storage, cfg))
 		r.Post("/skips/solve", skips_check.New(logger, storage, storage, storage, cfg))
 		r.Get("/task/{alias}", get_task.New(logger, storage))
 		r.Get("/submission-status/{submission_id}", submission_status.New(logger, storage))
