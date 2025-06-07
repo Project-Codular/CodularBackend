@@ -1,8 +1,8 @@
-package noisesAdd
+package noises
 
 import (
 	"codium-backend/internal/config"
-	"codium-backend/internal/storage/database"
+	database "codium-backend/internal/storage/database"
 	openRouterAPI "codium-backend/lib/api/openrouter"
 	response_info "codium-backend/lib/api/response"
 	"codium-backend/lib/logger/sl"
@@ -121,7 +121,7 @@ func New(log *slog.Logger, noisesGenerator NoisesGenerator, aliasChecker AliasCh
 			}
 		}
 
-		programmingLanguageId, err := noisesGenerator.GetProgrammingLanguageIDByName(decodedRequest.ProgrammingLanguage)
+		programmingLaunguageId, err := noisesGenerator.GetProgrammingLanguageIDByName(decodedRequest.ProgrammingLanguage)
 		if err != nil {
 			log.Error("invalid programming language: "+decodedRequest.ProgrammingLanguage, sl.Err(err))
 			writer.WriteHeader(http.StatusBadRequest)
@@ -157,7 +157,7 @@ func New(log *slog.Logger, noisesGenerator NoisesGenerator, aliasChecker AliasCh
 		render.JSON(writer, request, getOKResponse(alias))
 
 		// Асинхронная обработка
-		go processTaskAsync(log, alias, alias, decodedRequest.Code, decodedRequest.NoiseLevel, programmingLanguageId, noisesGenerator)
+		go processTaskAsync(log, alias, alias, decodedRequest.Code, decodedRequest.NoiseLevel, programmingLaunguageId, noisesGenerator)
 
 		log.Info("task processing initiated", slog.String("task_alias", alias))
 	}
@@ -219,7 +219,6 @@ func processCode(code string, noiseLevel int, logger *slog.Logger) (string, []st
 	fmt.Println("Response from OpenRouter:", response)
 
 	var decodedLLMResponse LLMResponse
-	response = openRouterAPI.CleanLLMResponse(response)
 	err = json.Unmarshal([]byte(response), &decodedLLMResponse)
 	if err != nil {
 		if errors.Is(err, io.EOF) {

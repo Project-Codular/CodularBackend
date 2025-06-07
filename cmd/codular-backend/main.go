@@ -3,11 +3,11 @@ package main
 import (
 	_ "codium-backend/docs" // Import generated Swagger docs
 	"codium-backend/internal/config"
+	"codium-backend/internal/http_server/handlers/generate/noises"
 	"codium-backend/internal/http_server/handlers/generate/skips"
 	"codium-backend/internal/http_server/handlers/get_status/submission_status"
 	"codium-backend/internal/http_server/handlers/get_status/task_status"
 	"codium-backend/internal/http_server/handlers/get_task"
-	"codium-backend/internal/http_server/handlers/noises"
 	"codium-backend/internal/http_server/handlers/solve/skips_check"
 	"codium-backend/internal/storage/database"
 	"codium-backend/lib/logger/handlers/slogpretty"
