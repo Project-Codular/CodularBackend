@@ -35,7 +35,7 @@ type Response struct {
 
 type LLMResponse struct {
 	NoisedCode string   `json:"noisedCode"`
-	Answers   []string `json:"answers"`
+	Answers    []string `json:"answers"`
 }
 
 //go:generate go run github.com/vektra/mockery/v2@v2.53.3 --name=NoisesGenerator
@@ -44,7 +44,6 @@ type NoisesGenerator interface {
 	GetProgrammingLanguageIDByName(name string) (int64, error)
 }
 
-
 type TasksProvider interface {
 	GetSavedCode(alias string) (string, error)
 }
@@ -52,7 +51,6 @@ type TasksProvider interface {
 type AliasChecker interface {
 	CheckAliasExist(alias string) (bool, error)
 }
-
 
 func getErrorResponse(msg string) *Response {
 	return &Response{
@@ -159,7 +157,7 @@ func New(log *slog.Logger, noisesGenerator NoisesGenerator, aliasChecker AliasCh
 		render.JSON(writer, request, getOKResponse(alias))
 
 		// Асинхронная обработка
-		go processTaskAsync(log, alias, alias, decodedRequest.Code, decodedRequest.NoiseLevel, programmingLanguageId, noisesGenerator)
+		go processTaskAsync(log, alias, alias, decodedRequest.Code, decodedRequest.NoiseLevel, programmingLaunguageId, noisesGenerator)
 
 		log.Info("task processing initiated", slog.String("task_alias", alias))
 	}
@@ -199,17 +197,17 @@ func processTaskAsync(log *slog.Logger, taskAlias string, alias, code string, no
 
 func processCode(code string, noiseLevel int, logger *slog.Logger) (string, []string, error) {
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
-	model := "microsoft/mai-ds-r1:free"
+	model := os.Getenv("MODEL")
 	temperature := 0.7
 
 	client := openRouterAPI.NewClient(apiKey, model, temperature)
 
-	prompts, err := openRouterAPI.LoadSystemPrompts("./config/noises_prompt.yaml") 
+	prompts, err := openRouterAPI.LoadSystemPrompts("./config/noises_gen_prompt.yaml")
 	if err != nil {
 		log.Fatalf("Error loading system prompts: %v", err)
 	}
 
-	systemPrompt, exists := prompts["noises_prompt"]
+	systemPrompt, exists := prompts["system_prompt"]
 	if !exists {
 		log.Fatalf("Noises prompt not found in the YAML file")
 	}

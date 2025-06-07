@@ -199,7 +199,7 @@ func processTaskAsync(log *slog.Logger, taskAlias string, alias, code string, sk
 
 func processCode(code string, number int, logger *slog.Logger) (string, []string, error) {
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
-	model := "microsoft/mai-ds-r1:free"
+	model := os.Getenv("MODEL")
 	temperature := 0.7
 
 	client := openRouterAPI.NewClient(apiKey, model, temperature)

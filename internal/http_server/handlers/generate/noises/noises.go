@@ -121,7 +121,7 @@ func New(log *slog.Logger, noisesGenerator NoisesGenerator, aliasChecker AliasCh
 			}
 		}
 
-		programmingLaunguageId, err := noisesGenerator.GetProgrammingLanguageIDByName(decodedRequest.ProgrammingLanguage)
+		programmingLanguageId, err := noisesGenerator.GetProgrammingLanguageIDByName(decodedRequest.ProgrammingLanguage)
 		if err != nil {
 			log.Error("invalid programming language: "+decodedRequest.ProgrammingLanguage, sl.Err(err))
 			writer.WriteHeader(http.StatusBadRequest)
@@ -157,7 +157,7 @@ func New(log *slog.Logger, noisesGenerator NoisesGenerator, aliasChecker AliasCh
 		render.JSON(writer, request, getOKResponse(alias))
 
 		// Асинхронная обработка
-		go processTaskAsync(log, alias, alias, decodedRequest.Code, decodedRequest.NoiseLevel, programmingLaunguageId, noisesGenerator)
+		go processTaskAsync(log, alias, alias, decodedRequest.Code, decodedRequest.NoiseLevel, programmingLanguageId, noisesGenerator)
 
 		log.Info("task processing initiated", slog.String("task_alias", alias))
 	}
@@ -197,17 +197,17 @@ func processTaskAsync(log *slog.Logger, taskAlias string, alias, code string, no
 
 func processCode(code string, noiseLevel int, logger *slog.Logger) (string, []string, error) {
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
-	model := "microsoft/mai-ds-r1:free"
+	model := os.Getenv("MODEL")
 	temperature := 0.7
 
 	client := openRouterAPI.NewClient(apiKey, model, temperature)
 
-	prompts, err := openRouterAPI.LoadSystemPrompts("./config/noises_prompt.yaml")
+	prompts, err := openRouterAPI.LoadSystemPrompts("./config/noises_gen_prompt.yaml")
 	if err != nil {
 		log.Fatalf("Error loading system prompts: %v", err)
 	}
 
-	systemPrompt, exists := prompts["noises_prompt"]
+	systemPrompt, exists := prompts["system_prompt"]
 	if !exists {
 		log.Fatalf("Noises prompt not found in the YAML file")
 	}
@@ -219,6 +219,7 @@ func processCode(code string, noiseLevel int, logger *slog.Logger) (string, []st
 	fmt.Println("Response from OpenRouter:", response)
 
 	var decodedLLMResponse LLMResponse
+	response = openRouterAPI.CleanLLMResponse(response)
 	err = json.Unmarshal([]byte(response), &decodedLLMResponse)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
