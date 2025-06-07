@@ -78,18 +78,19 @@ func getOKResponse(submissionID int64) *ServerResponse {
 	}
 }
 
-// New generates skips for the provided code and saves initial status to Redis
-// @Summary Generate and save skips for code
-// @Description Processes the provided source code with a specified number of skips, generates a unique alias, and saves initial status to Redis. Returns the task alias for status checking.
+// New handles the submission of answers for a skips task.
+// @Summary Submit answers for a skips task
+// @Description Receives user answers for a given task alias, saves the submission, and asynchronously processes it.
 // @Tags Skips
 // @Accept json
 // @Produce json
-// @Param request body ClientRequest true "Source code, number of skips, and programming language"
-// @Success 200 {object} ServerResponse "Successfully initiated skips generation with task alias"
-// @Success 200 {object} ServerResponse "Example response" Example({"responseInfo":{"status":"OK"},"taskAlias":"abc123"})
-// @Failure 400 {object} ServerResponse "Invalid request or empty body"
+// @Param request body ClientRequest true "Task alias and user's answers"
+// @Success 200 {object} ServerResponse "Successfully initiated submission processing"
+// @Success 200 {object} ServerResponse "Example response for successful submission" Example({"responseInfo":{"status":"OK"},"submissionId":123})
+// @Failure 400 {object} ServerResponse "Invalid request body or validation error"
+// @Failure 404 {object} ServerResponse "Task not found"
 // @Failure 500 {object} ServerResponse "Internal server error"
-// @Router /skips/generate [post]
+// @Router /skips/solve [post]
 func New(log *slog.Logger, submissionStorage SubmissionStorage, taskStorage TasksStorage, aliasChecker AliasChecker, cfg *config.Config) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		const functionPath = "internal.http_server.handlers.solve.skips_check.New"

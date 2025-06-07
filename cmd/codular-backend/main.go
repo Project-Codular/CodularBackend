@@ -79,7 +79,7 @@ func main() {
 		r.Post("/skips/generate", skips.New(logger, storage, storage, cfg))
 		r.Post("/skips/solve", skips_check.New(logger, storage, storage, storage, cfg))
 		r.Get("/task/{alias}", get_task.New(logger, storage))
-		r.Get("/submission-status/{submission_id}", submission_status.GetSubmissionStatus(logger, storage))
+		r.Get("/submission-status/{submission_id}", submission_status.New(logger, storage))
 		r.Get("/task-status/{alias}", task_status.GetTaskStatus(logger))
 	})
 

@@ -35,6 +35,36 @@ definitions:
       taskAlias:
         type: string
     type: object
+  skips_check.ClientRequest:
+    properties:
+      answers:
+        items:
+          type: string
+        type: array
+      taskAlias:
+        type: string
+    required:
+    - answers
+    - taskAlias
+    type: object
+  skips_check.ServerResponse:
+    properties:
+      responseInfo:
+        $ref: '#/definitions/response_info.ResponseInfo'
+      submissionId:
+        type: integer
+    type: object
+  submission_status.ServerResponse:
+    properties:
+      IsCorrect:
+        type: string
+      hints:
+        items:
+          type: string
+        type: array
+      responseInfo:
+        $ref: '#/definitions/response_info.ResponseInfo'
+    type: object
   task_status.StatusResponse:
     properties:
       error:
@@ -93,6 +123,74 @@ paths:
       summary: Generate and save skips for code
       tags:
       - Skips
+  /skips/solve:
+    post:
+      consumes:
+      - application/json
+      description: Receives user answers for a given task alias, saves the submission,
+        and asynchronously processes it.
+      parameters:
+      - description: Task alias and user's answers
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/skips_check.ClientRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Example response for successful submission" Example({"responseInfo":{"status":"OK"},"submissionId":123})
+          schema:
+            $ref: '#/definitions/skips_check.ServerResponse'
+        "400":
+          description: Invalid request body or validation error
+          schema:
+            $ref: '#/definitions/skips_check.ServerResponse'
+        "404":
+          description: Task not found
+          schema:
+            $ref: '#/definitions/skips_check.ServerResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/skips_check.ServerResponse'
+      summary: Submit answers for a skips task
+      tags:
+      - Skips
+  /submission-status/{submission_id}:
+    get:
+      description: Returns the current status of a submission by its ID, including
+        any hints if available.
+      parameters:
+      - description: Submission ID
+        in: path
+        name: submission_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'Example response for failure with hints" Example({"responseInfo":{"status":"OK"},"IsCorrect":"Failed","hints":["1''th
+            skip: Hint message 1","3''th skip: Hint message 2"]})'
+          schema:
+            $ref: '#/definitions/submission_status.ServerResponse'
+        "400":
+          description: Invalid submission ID format
+          schema:
+            $ref: '#/definitions/submission_status.ServerResponse'
+        "404":
+          description: Submission not found
+          schema:
+            $ref: '#/definitions/submission_status.ServerResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/submission_status.ServerResponse'
+      summary: Get submission status
+      tags:
+      - Submissions
   /task-status/{alias}:
     get:
       description: Returns the current status of a task by its alias.

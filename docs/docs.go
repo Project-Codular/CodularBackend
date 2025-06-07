@@ -70,6 +70,105 @@ const docTemplate = `{
                 }
             }
         },
+        "/skips/solve": {
+            "post": {
+                "description": "Receives user answers for a given task alias, saves the submission, and asynchronously processes it.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Skips"
+                ],
+                "summary": "Submit answers for a skips task",
+                "parameters": [
+                    {
+                        "description": "Task alias and user's answers",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/skips_check.ClientRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Example response for successful submission\" Example({\"responseInfo\":{\"status\":\"OK\"},\"submissionId\":123})",
+                        "schema": {
+                            "$ref": "#/definitions/skips_check.ServerResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body or validation error",
+                        "schema": {
+                            "$ref": "#/definitions/skips_check.ServerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Task not found",
+                        "schema": {
+                            "$ref": "#/definitions/skips_check.ServerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/skips_check.ServerResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/submission-status/{submission_id}": {
+            "get": {
+                "description": "Returns the current status of a submission by its ID, including any hints if available.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Submissions"
+                ],
+                "summary": "Get submission status",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Submission ID",
+                        "name": "submission_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Example response for failure with hints\" Example({\"responseInfo\":{\"status\":\"OK\"},\"IsCorrect\":\"Failed\",\"hints\":[\"1'th skip: Hint message 1\",\"3'th skip: Hint message 2\"]})",
+                        "schema": {
+                            "$ref": "#/definitions/submission_status.ServerResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid submission ID format",
+                        "schema": {
+                            "$ref": "#/definitions/submission_status.ServerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Submission not found",
+                        "schema": {
+                            "$ref": "#/definitions/submission_status.ServerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/submission_status.ServerResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/task-status/{alias}": {
             "get": {
                 "description": "Returns the current status of a task by its alias.",
@@ -210,6 +309,52 @@ const docTemplate = `{
                 },
                 "taskAlias": {
                     "type": "string"
+                }
+            }
+        },
+        "skips_check.ClientRequest": {
+            "type": "object",
+            "required": [
+                "answers",
+                "taskAlias"
+            ],
+            "properties": {
+                "answers": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "taskAlias": {
+                    "type": "string"
+                }
+            }
+        },
+        "skips_check.ServerResponse": {
+            "type": "object",
+            "properties": {
+                "responseInfo": {
+                    "$ref": "#/definitions/response_info.ResponseInfo"
+                },
+                "submissionId": {
+                    "type": "integer"
+                }
+            }
+        },
+        "submission_status.ServerResponse": {
+            "type": "object",
+            "properties": {
+                "IsCorrect": {
+                    "type": "string"
+                },
+                "hints": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "responseInfo": {
+                    "$ref": "#/definitions/response_info.ResponseInfo"
                 }
             }
         },

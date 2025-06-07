@@ -32,21 +32,22 @@ func getErrorResponse(msg string) *ServerResponse {
 	}
 }
 
-// GetSubmissionStatus возвращает статус посылки по её ID
+// GetSubmissionStatus returns the status of a submission by its ID.
 // @Summary Get submission status
 // @Description Returns the current status of a submission by its ID, including any hints if available.
 // @Tags Submissions
 // @Produce json
 // @Param submission_id path int true "Submission ID"
-// @Success 200 {object} SubmissionStatusResponse "Submission status retrieved successfully"
-// @Success 200 {object} SubmissionStatusResponse "Example response" Example({"status":"Success","hints":[]})
-// @Failure 400 {object} SubmissionStatusResponse "Invalid submission ID"
-// @Failure 404 {object} SubmissionStatusResponse "Submission not found"
-// @Failure 500 {object} SubmissionStatusResponse "Internal server error"
+// @Success 200 {object} ServerResponse "Submission status retrieved successfully"
+// @Success 200 {object} ServerResponse "Example response for success" Example({"responseInfo":{"status":"OK"},"IsCorrect":"Success","hints":[]})
+// @Success 200 {object} ServerResponse "Example response for failure with hints" Example({"responseInfo":{"status":"OK"},"IsCorrect":"Failed","hints":["1'th skip: Hint message 1","3'th skip: Hint message 2"]})
+// @Failure 400 {object} ServerResponse "Invalid submission ID format"
+// @Failure 404 {object} ServerResponse "Submission not found"
+// @Failure 500 {object} ServerResponse "Internal server error"
 // @Router /submission-status/{submission_id} [get]
-func GetSubmissionStatus(log *slog.Logger, storage *database.Storage) http.HandlerFunc {
+func New(log *slog.Logger, storage *database.Storage) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		const functionPath = "internal.http_server.handlers.submission_status.GetSubmissionStatus"
+		const functionPath = "internal.http_server.handlers.submission_status.New"
 
 		log = log.With(
 			slog.String("function_path", functionPath),
