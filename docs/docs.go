@@ -26,7 +26,7 @@ const docTemplate = `{
     "paths": {
         "/auth/login": {
             "post": {
-                "description": "Authenticates a user with email and password, returning access and refresh tokens.",
+                "description": "Authenticates a user with email and password, returning access token and setting refresh token in a secure cookie.",
                 "consumes": [
                     "application/json"
                 ],
@@ -76,12 +76,41 @@ const docTemplate = `{
                 }
             }
         },
-        "/auth/refresh": {
+        "/auth/logout": {
             "post": {
-                "description": "Refreshes the access token using a valid refresh token.",
-                "consumes": [
+                "description": "Invalidates the refresh token by clearing the secure cookie and removing it from the database.",
+                "produces": [
                     "application/json"
                 ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Logout user",
+                "responses": {
+                    "200": {
+                        "description": "User logged out successfully",
+                        "schema": {
+                            "$ref": "#/definitions/auth.AuthResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Missing refresh token cookie",
+                        "schema": {
+                            "$ref": "#/definitions/auth.AuthResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/auth.AuthResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/refresh": {
+            "post": {
+                "description": "Refreshes the access token using a valid refresh token provided in a secure cookie.",
                 "produces": [
                     "application/json"
                 ],
@@ -89,17 +118,6 @@ const docTemplate = `{
                     "Auth"
                 ],
                 "summary": "Refresh access token",
-                "parameters": [
-                    {
-                        "description": "Refresh token",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/auth.RefreshRequest"
-                        }
-                    }
-                ],
                 "responses": {
                     "200": {
                         "description": "Access token refreshed successfully",
@@ -108,7 +126,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid request or empty body",
+                        "description": "Missing refresh token cookie",
                         "schema": {
                             "$ref": "#/definitions/auth.AuthResponse"
                         }
@@ -130,7 +148,7 @@ const docTemplate = `{
         },
         "/auth/register": {
             "post": {
-                "description": "Registers a new user with email and password, returning access and refresh tokens.",
+                "description": "Registers a new user with email and password, returning access token and setting refresh token in a secure cookie.",
                 "consumes": [
                     "application/json"
                 ],
@@ -550,9 +568,6 @@ const docTemplate = `{
                 "access_token": {
                     "type": "string"
                 },
-                "refresh_token": {
-                    "type": "string"
-                },
                 "responseInfo": {
                     "$ref": "#/definitions/response_info.ResponseInfo"
                 }
@@ -569,17 +584,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "password": {
-                    "type": "string"
-                }
-            }
-        },
-        "auth.RefreshRequest": {
-            "type": "object",
-            "required": [
-                "refresh_token"
-            ],
-            "properties": {
-                "refresh_token": {
                     "type": "string"
                 }
             }

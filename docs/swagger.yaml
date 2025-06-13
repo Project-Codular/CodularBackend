@@ -4,8 +4,6 @@ definitions:
     properties:
       access_token:
         type: string
-      refresh_token:
-        type: string
       responseInfo:
         $ref: '#/definitions/response_info.ResponseInfo'
     type: object
@@ -18,13 +16,6 @@ definitions:
     required:
     - email
     - password
-    type: object
-  auth.RefreshRequest:
-    properties:
-      refresh_token:
-        type: string
-    required:
-    - refresh_token
     type: object
   auth.RegisterRequest:
     properties:
@@ -174,7 +165,7 @@ paths:
       consumes:
       - application/json
       description: Authenticates a user with email and password, returning access
-        and refresh tokens.
+        token and setting refresh token in a secure cookie.
       parameters:
       - description: User email and password
         in: body
@@ -204,18 +195,32 @@ paths:
       summary: Login user
       tags:
       - Auth
+  /auth/logout:
+    post:
+      description: Invalidates the refresh token by clearing the secure cookie and
+        removing it from the database.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User logged out successfully
+          schema:
+            $ref: '#/definitions/auth.AuthResponse'
+        "400":
+          description: Missing refresh token cookie
+          schema:
+            $ref: '#/definitions/auth.AuthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/auth.AuthResponse'
+      summary: Logout user
+      tags:
+      - Auth
   /auth/refresh:
     post:
-      consumes:
-      - application/json
-      description: Refreshes the access token using a valid refresh token.
-      parameters:
-      - description: Refresh token
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/auth.RefreshRequest'
+      description: Refreshes the access token using a valid refresh token provided
+        in a secure cookie.
       produces:
       - application/json
       responses:
@@ -224,7 +229,7 @@ paths:
           schema:
             $ref: '#/definitions/auth.AuthResponse'
         "400":
-          description: Invalid request or empty body
+          description: Missing refresh token cookie
           schema:
             $ref: '#/definitions/auth.AuthResponse'
         "401":
@@ -243,7 +248,7 @@ paths:
       consumes:
       - application/json
       description: Registers a new user with email and password, returning access
-        and refresh tokens.
+        token and setting refresh token in a secure cookie.
       parameters:
       - description: User email and password
         in: body
