@@ -341,7 +341,7 @@ paths:
             $ref: '#/definitions/noises.Response'
       summary: Generate and save noise for code
       tags:
-      - Noise
+      - Noises
   /noises/solve:
     post:
       consumes:

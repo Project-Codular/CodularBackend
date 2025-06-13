@@ -61,7 +61,7 @@ func getOKResponse(taskAlias string) *Response {
 // New generates noise for the provided code and saves it to the database.
 // @Summary Generate and save noise for code
 // @Description Processes the provided source code with a specified level of noise, generates a unique alias, and saves it to the database.
-// @Tags Noise
+// @Tags Noises
 // @Accept json
 // @Produce json
 // @Param request body Request true "Source code and level of noise"

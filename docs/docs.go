@@ -208,7 +208,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Noise"
+                    "Noises"
                 ],
                 "summary": "Generate and save noise for code",
                 "parameters": [
