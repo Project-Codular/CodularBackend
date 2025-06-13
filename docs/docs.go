@@ -418,9 +418,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/tasks/{alias}": {
+        "/task/{alias}": {
             "get": {
-                "description": "Retrieves the processed code associated with the given alias from the database.",
+                "description": "Retrieves the processed code associated with the given alias from the database, including whether the user can edit the task.",
                 "produces": [
                     "application/json"
                 ],
@@ -439,13 +439,25 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Example response\" Example({\"responseInfo\":{\"status\":\"OK\"},\"codeToSolve\":\"processed code\"})",
+                        "description": "Example response\" Example({\"responseInfo\":{\"status\":\"OK\"},\"codeToSolve\":\"processed code\",\"canEdit\":true})",
                         "schema": {
                             "$ref": "#/definitions/get_task.Response"
                         }
                     },
                     "400": {
                         "description": "Task alias is empty",
+                        "schema": {
+                            "$ref": "#/definitions/get_task.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/get_task.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Task not found",
                         "schema": {
                             "$ref": "#/definitions/get_task.Response"
                         }
@@ -520,6 +532,9 @@ const docTemplate = `{
         "get_task.Response": {
             "type": "object",
             "properties": {
+                "canEdit": {
+                    "type": "boolean"
+                },
                 "codeToSolve": {
                     "type": "string"
                 },
