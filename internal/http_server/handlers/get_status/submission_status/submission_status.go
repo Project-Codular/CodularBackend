@@ -20,7 +20,8 @@ type ClientRequest struct {
 
 type ServerResponse struct {
 	ResponseInfo response_info.ResponseInfo `json:"responseInfo"`
-	Status       string                     `json:"IsCorrect"`
+	Status       string                     `json:"isCorrect"`
+	Score        int                        `json:"score"`
 	Hints        []string                   `json:"hints"`
 }
 
@@ -73,7 +74,7 @@ func New(log *slog.Logger, storage *database.Storage) http.HandlerFunc {
 		}
 
 		// Формирование ответа
-		submissionStatus, err := storage.GetSubmissionStatus(submissionID)
+		submissionStatus, err := storage.GetFullSubmissionStatus(submissionID)
 		if errors.Is(err, fmt.Errorf("submission not found")) {
 			log.Error("submission not found", slog.Int64("submission_id", submissionID))
 			writer.WriteHeader(http.StatusNotFound)
@@ -87,23 +88,17 @@ func New(log *slog.Logger, storage *database.Storage) http.HandlerFunc {
 			return
 		}
 
-		submissionHits, err := storage.GetSubmissionHints(submissionID)
-		if err != nil {
-			log.Error("failed to get submission hints", sl.Err(err))
-			writer.WriteHeader(http.StatusInternalServerError)
-			render.JSON(writer, request, getErrorResponse("internal server error"))
-			return
-		}
-
-		log.Info("Got submission hints", slog.Any("hints", submissionHits))
+		log.Info("Got submission hints", slog.Any("hints", submissionStatus.Hints))
+		log.Info("Got submission score", slog.Int("score", submissionStatus.Score))
 
 		writer.WriteHeader(http.StatusOK)
 		render.JSON(writer, request, ServerResponse{
 			ResponseInfo: response_info.OK(),
-			Status:       submissionStatus,
-			Hints:        submissionHits,
+			Status:       submissionStatus.Status,
+			Score:        submissionStatus.Score,
+			Hints:        submissionStatus.Hints,
 		})
 
-		log.Info("submission status retrieved", slog.Int64("submission_id", submissionID), slog.String("status", submissionStatus))
+		log.Info("submission status retrieved", slog.Int64("submission_id", submissionID), slog.String("status", submissionStatus.Status))
 	}
 }

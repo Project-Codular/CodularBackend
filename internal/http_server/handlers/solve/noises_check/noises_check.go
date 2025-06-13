@@ -1,12 +1,10 @@
-package skips_check
+package noises_check
 
 import (
 	"codular-backend/internal/storage/database"
 	openRouterAPI "codular-backend/lib/api/openrouter"
 	response_info "codular-backend/lib/api/response"
 	"codular-backend/lib/logger/sl"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,8 +20,8 @@ import (
 )
 
 type ClientRequest struct {
-	TaskAlias string   `json:"taskAlias" validate:"required"`
-	Answers   []string `json:"answers" validate:"required"`
+	TaskAlias string `json:"taskAlias" validate:"required"`
+	Answer    string `json:"answer" validate:"required"`
 }
 
 type ServerResponse struct {
@@ -32,13 +30,8 @@ type ServerResponse struct {
 }
 
 type LLMResponse struct {
-	Status string  `json:"status"`
-	Hints  []Hints `json:"hints"`
-}
-
-type Hints struct {
-	Index   int    `json:"index"`
-	Message string `json:"message"`
+	Score int      `json:"score"`
+	Hints []string `json:"hints"`
 }
 
 func getErrorResponse(msg string) *ServerResponse {
@@ -62,10 +55,10 @@ func getOKResponse(submissionID int64) *ServerResponse {
 	}
 }
 
-// New handles the submission of answers for a skips task.
-// @Summary Submit answers for a skips task
+// New handles the submission of answers for a noises task.
+// @Summary Submit answers for a noises task
 // @Description Receives user answers for a given task alias, saves the submission, and asynchronously processes it.
-// @Tags Skips
+// @Tags Noises
 // @Accept json
 // @Produce json
 // @Param request body ClientRequest true "Task alias and user's answers"
@@ -112,9 +105,15 @@ func New(log *slog.Logger, storage *database.Storage) http.HandlerFunc {
 			}
 		}
 
-		// Проверка существования задачи (опционально)
+		// Проверка существования задачи
 		exists, err := storage.CheckAliasExist(decodedRequest.TaskAlias)
-		if err != nil || !exists {
+		if err != nil {
+			log.Error("error while finding task with id", sl.Err(err))
+			writer.WriteHeader(http.StatusInternalServerError)
+			render.JSON(writer, request, getErrorResponse("error while finding task with id"))
+			return
+		}
+		if !exists {
 			log.Error("task not found", sl.Err(err))
 			writer.WriteHeader(http.StatusNotFound)
 			render.JSON(writer, request, getErrorResponse("task not found"))
@@ -122,7 +121,7 @@ func New(log *slog.Logger, storage *database.Storage) http.HandlerFunc {
 		}
 
 		// Сохранение посылки
-		submissionID, err := storage.SavePendingSubmission(decodedRequest.TaskAlias, decodedRequest.Answers)
+		submissionID, err := storage.SavePendingSubmission(decodedRequest.TaskAlias, []string{decodedRequest.Answer})
 		if err != nil {
 			log.Error("failed to save submission", sl.Err(err))
 			writer.WriteHeader(http.StatusInternalServerError)
@@ -139,14 +138,14 @@ func New(log *slog.Logger, storage *database.Storage) http.HandlerFunc {
 		render.JSON(writer, request, response)
 
 		// Асинхронная обработка
-		go processSubmissionAsync(log, storage, decodedRequest.TaskAlias, submissionID, decodedRequest.Answers)
+		go processSubmissionAsync(log, storage, decodedRequest.TaskAlias, submissionID, decodedRequest.Answer)
 
 		log.Info("submission processing initiated", slog.Int64("submission_id", submissionID))
 	}
 }
 
 // processTaskAsync асинхронно обрабатывает задачу и сохраняет результат
-func processSubmissionAsync(log *slog.Logger, storage *database.Storage, taskAlias string, submissionID int64, userAnswers []string) {
+func processSubmissionAsync(log *slog.Logger, storage *database.Storage, taskAlias string, submissionID int64, userAnswer string) {
 	log = log.With(slog.Int64("submission_id", submissionID))
 
 	correctAnswers, err := storage.GetCodeAnswers(taskAlias)
@@ -159,7 +158,7 @@ func processSubmissionAsync(log *slog.Logger, storage *database.Storage, taskAli
 		}
 	}
 
-	skipsCode, err := storage.GetSavedTaskCode(taskAlias)
+	taskCode, err := storage.GetSavedTaskCode(taskAlias)
 	if err != nil {
 		log.Error("Got error while getting saved code: " + err.Error())
 		err := storage.UpdateSubmissionStatusToFailed(submissionID)
@@ -169,7 +168,7 @@ func processSubmissionAsync(log *slog.Logger, storage *database.Storage, taskAli
 		}
 	}
 
-	llmResponse, err := processSubmission(correctAnswers, userAnswers, skipsCode, log)
+	llmResponse, err := processSubmission(correctAnswers[0], taskCode, userAnswer, log)
 	if err != nil {
 		log.Error("Got error while processing submission: " + err.Error())
 		err := storage.UpdateSubmissionStatusToFailed(submissionID)
@@ -188,10 +187,10 @@ func processSubmissionAsync(log *slog.Logger, storage *database.Storage, taskAli
 	}
 
 	log.Info(fmt.Sprintf("LLM response struct: %+v", *llmResponse))
-	log.Info("Processed LLM.", slog.Any("hints", llmResponse.Hints), slog.String("status", llmResponse.Status))
+	log.Info("Processed LLM.", slog.Any("hints", llmResponse.Hints), slog.Int("score", llmResponse.Score))
 
-	if llmResponse.Status == "ok" {
-		err = storage.UpdateSubmissionStatusToSuccess(submissionID, 100)
+	if llmResponse.Score >= 100 {
+		err = storage.UpdateSubmissionStatusToSuccess(submissionID, llmResponse.Score)
 		if err != nil {
 			log.Error("Got error while setting submission to success: " + err.Error())
 			err := storage.UpdateSubmissionStatusToFailed(submissionID)
@@ -204,14 +203,14 @@ func processSubmissionAsync(log *slog.Logger, storage *database.Storage, taskAli
 	} else {
 		hints := make([]string, 0, len(llmResponse.Hints))
 		for i := 0; i < len(llmResponse.Hints); i++ {
-			hints = append(hints, strconv.Itoa(llmResponse.Hints[i].Index)+"'th skip: "+llmResponse.Hints[i].Message)
+			hints = append(hints, llmResponse.Hints[i])
 		}
-		log.Info("Processed LLM.", slog.Any("hints", llmResponse.Hints), slog.String("status", llmResponse.Status))
+		log.Info("Processed LLM.", slog.Any("hints", llmResponse.Hints), slog.Int("score", llmResponse.Score))
 
 		err := storage.UpdateSubmissionStatusToFailedWithHints(
 			submissionID,
 			hints,
-			0,
+			llmResponse.Score,
 		)
 		if err != nil {
 			log.Error("Got error while setting submission to failed: " + err.Error())
@@ -224,46 +223,14 @@ func processSubmissionAsync(log *slog.Logger, storage *database.Storage, taskAli
 	}
 }
 
-type PromptData struct {
-	SkipsCode string     `json:"skipsCode"`
-	Answers   [][]string `json:"answers"`
-}
-
-func encodePrompt(skipsCode string, correctAnswers, userAnswers []string) (string, error) {
-	// Проверяем, что длины массивов совпадают
-	if len(correctAnswers) != len(userAnswers) {
-		return "", fmt.Errorf("length of correctAnswers and userAnswers must be equal")
-	}
-
-	// Формируем массив пар [correct_answer, user_answer]
-	var answers [][]string
-	for i := 0; i < len(correctAnswers); i++ {
-		answers = append(answers, []string{correctAnswers[i], userAnswers[i]})
-	}
-
-	// Создаём структуру с данными
-	prompt := PromptData{
-		SkipsCode: skipsCode,
-		Answers:   answers,
-	}
-
-	// Сериализуем в JSON и преобразуем в строку
-	jsonData, err := json.Marshal(prompt)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal prompt to JSON: %v", err)
-	}
-
-	return string(jsonData), nil
-}
-
-func processSubmission(correctAnswers []string, userAnswers []string, skipsCode string, logger *slog.Logger) (*LLMResponse, error) {
+func processSubmission(originalCode string, noisedCode string, userSolutionCode string, logger *slog.Logger) (*LLMResponse, error) {
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	model := os.Getenv("MODEL")
 	temperature := 0.7
 
 	client := openRouterAPI.NewClient(apiKey, model, temperature)
 
-	prompts, err := openRouterAPI.LoadSystemPrompts("./config/skips_check_prompt.yaml")
+	prompts, err := openRouterAPI.LoadSystemPrompts("./config/noises_check_prompt.yaml")
 	if err != nil {
 		log.Fatalf("Error loading system prompts: %v", err)
 	}
@@ -273,12 +240,7 @@ func processSubmission(correctAnswers []string, userAnswers []string, skipsCode 
 		log.Fatalf("System prompt not found in the YAML file")
 	}
 
-	userPrompt, err := encodePrompt(skipsCode, correctAnswers, userAnswers)
-	if err != nil {
-		return &LLMResponse{}, err
-	}
-
-	response, err := client.SendChat(systemPrompt, userPrompt)
+	response, err := client.SendChat(systemPrompt, "Исходный код:\n"+originalCode+"\nЗашумленный код:\n"+noisedCode+"\nРешение пользователя:\n"+userSolutionCode)
 	if err != nil {
 		log.Fatalf("Error sending request: %v", err)
 	}
@@ -301,14 +263,4 @@ func processSubmission(correctAnswers []string, userAnswers []string, skipsCode 
 	logger.Info("LLM response body was decoded", slog.Any("decodedLLMResponse", decodedLLMResponse))
 
 	return &decodedLLMResponse, nil
-}
-
-func generateAlias(length int) string {
-	b := make([]byte, length)
-	_, err := rand.Read(b)
-	if err != nil {
-		panic(err)
-	}
-
-	return base64.URLEncoding.EncodeToString(b)[:length]
 }

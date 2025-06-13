@@ -74,10 +74,11 @@ CREATE TABLE IF NOT EXISTS aliases (
 
 -- Create the submissions table if it doesn't exist
 CREATE TABLE IF NOT EXISTS submissions (
-                                           id SERIAL PRIMARY KEY,
-                                           task_alias TEXT NOT NULL,
-                                           submission_code TEXT[],
-                                           status TEXT NOT NULL CHECK (status IN ('Pending', 'Success', 'Failed')),
+    id SERIAL PRIMARY KEY,
+    task_alias TEXT NOT NULL,
+    submission_code TEXT[],
+    status TEXT NOT NULL CHECK (status IN ('Pending', 'Success', 'Failed')),
+    score INTEGER,
     hints TEXT[],
     submitted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (task_alias) REFERENCES aliases(alias) ON DELETE CASCADE

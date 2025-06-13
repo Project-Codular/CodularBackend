@@ -11,6 +11,7 @@ import (
 	"codular-backend/internal/http_server/handlers/get_status/task_status"
 	"codular-backend/internal/http_server/handlers/get_task"
 	"codular-backend/internal/http_server/handlers/regenerate"
+	"codular-backend/internal/http_server/handlers/solve/noises_check"
 	"codular-backend/internal/http_server/handlers/solve/skips_check"
 	"codular-backend/internal/http_server/middleware"
 	"codular-backend/internal/storage/database"
@@ -58,7 +59,7 @@ func main() {
 	logger.Info("Starting Codular backend", slog.String("env", cfg.Env))
 	logger.Debug("Debug messages are enabled")
 
-	err := database.New(cfg)
+	err := database.New()
 	if err != nil {
 		logger.Error(fmt.Sprintf("Error while initializing DB: %s", err))
 		log.Fatalf("Failed to init DB: %s", err)
@@ -113,6 +114,7 @@ func main() {
 			r.Post("/skips/generate", skips.New(logger, storage, cfg))
 			r.Post("/noises/generate", noises.New(logger, storage, cfg))
 			r.Post("/skips/solve", skips_check.New(logger, storage))
+			r.Post("/noises/solve", noises_check.New(logger, storage))
 			r.Get("/task/{alias}", get_task.New(logger, storage))
 			r.Patch("/task/{alias}/regenerate", regenerate.New(logger, storage))
 			r.Patch("/task/{alias}/set-access", edit_task.ChangeAccess(logger, storage))

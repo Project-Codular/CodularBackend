@@ -76,7 +76,7 @@ func New(logger *slog.Logger, storage *database.Storage) http.HandlerFunc {
 		}
 
 		// Получение кода задачи
-		codeFromDb, err := storage.GetSavedCode(alias)
+		codeFromDb, err := storage.GetSavedTaskCode(alias)
 		if err != nil {
 			log.Error("failed to get code", sl.Err(err))
 			writer.WriteHeader(http.StatusNotFound)

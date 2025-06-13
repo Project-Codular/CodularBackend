@@ -1,7 +1,6 @@
 package database
 
 import (
-	"codular-backend/internal/config"
 	"codular-backend/internal/storage"
 	"context"
 	"encoding/json"
@@ -32,6 +31,7 @@ type TaskStatus struct {
 type SubmissionStatus struct {
 	Status string   `json:"status"`
 	Hints  []string `json:"hints"`
+	Score  int      `json:"score"`
 }
 
 type Token struct {
@@ -171,6 +171,23 @@ func (s *Storage) UpdateTaskCodeAndAnswers(taskID int64, taskCode string, answer
 	result, err := s.db.Exec(context.Background(), query, taskCode, answers, time.Now().UTC(), taskID)
 	if err != nil {
 		return fmt.Errorf("failed to update task: %v", err)
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("task with ID %d not found", taskID)
+	}
+	return nil
+}
+
+// UpdateTaskPublicStatus обновляет статус public задачи
+func (s *Storage) UpdateTaskPublicStatus(taskID int64, public bool) error {
+	query := `
+        UPDATE tasks
+        SET public = $1
+        WHERE id = $2
+    `
+	result, err := s.db.Exec(context.Background(), query, public, taskID)
+	if err != nil {
+		return fmt.Errorf("failed to update task public status: %v", err)
 	}
 	if result.RowsAffected() == 0 {
 		return fmt.Errorf("task with ID %d not found", taskID)
@@ -353,7 +370,7 @@ func (s *Storage) SaveAlias(alias string, taskId int64) (int64, error) {
 	return id, nil
 }
 
-func (s *Storage) GetSavedCode(alias string) (string, error) {
+func (s *Storage) GetSavedTaskCode(alias string) (string, error) {
 	query := `
 		SELECT tasks.taskCode
 		FROM aliases
@@ -443,13 +460,13 @@ func (s *Storage) UpdateSubmissionStatusToFailed(submissionID int64) error {
 	return nil
 }
 
-func (s *Storage) UpdateSubmissionStatusToSuccess(submissionID int64) error {
+func (s *Storage) UpdateSubmissionStatusToSuccess(submissionID int64, score int) error {
 	query := `
         UPDATE submissions
-        SET status = 'Success'
+        SET status = 'Success', score = $2
         WHERE id = $1
     `
-	result, err := s.db.Exec(context.Background(), query, submissionID)
+	result, err := s.db.Exec(context.Background(), query, submissionID, score)
 	if err != nil {
 		return fmt.Errorf("failed to update submission status to Success: %v", err)
 	}
@@ -459,10 +476,10 @@ func (s *Storage) UpdateSubmissionStatusToSuccess(submissionID int64) error {
 	return nil
 }
 
-func (s *Storage) UpdateSubmissionStatusToFailedWithHints(submissionID int64, hints []string) error {
+func (s *Storage) UpdateSubmissionStatusToFailedWithHints(submissionID int64, hints []string, score int) error {
 	query := `
         UPDATE submissions
-        SET status = 'Failed', hints = $2
+        SET status = 'Failed', hints = $2, score = $3
         WHERE id = $1
     `
 	var hintsVal interface{}
@@ -471,7 +488,7 @@ func (s *Storage) UpdateSubmissionStatusToFailedWithHints(submissionID int64, hi
 	} else {
 		hintsVal = hints
 	}
-	result, err := s.db.Exec(context.Background(), query, submissionID, hintsVal)
+	result, err := s.db.Exec(context.Background(), query, submissionID, hintsVal, score)
 	if err != nil {
 		return fmt.Errorf("failed to update submission status to Failed with hints: %v", err)
 	}
@@ -481,14 +498,14 @@ func (s *Storage) UpdateSubmissionStatusToFailedWithHints(submissionID int64, hi
 	return nil
 }
 
-func (s *Storage) GetSubmissionStatusAndHints(submissionID int64) (SubmissionStatus, error) {
+func (s *Storage) GetFullSubmissionStatus(submissionID int64) (SubmissionStatus, error) {
 	query := `
-        SELECT status, COALESCE(hints, '{}')
+        SELECT status, COALESCE(hints, '{}'), score
         FROM submissions
         WHERE id = $1
     `
 	var status SubmissionStatus
-	err := s.db.QueryRow(context.Background(), query, submissionID).Scan(&status.Status, &status.Hints)
+	err := s.db.QueryRow(context.Background(), query, submissionID).Scan(&status.Status, &status.Hints, &status.Score)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return SubmissionStatus{}, fmt.Errorf("submission not found")
 	}
@@ -515,7 +532,7 @@ func (s *Storage) GetSubmissionHints(submissionID int64) ([]string, error) {
 	return hints, nil
 }
 
-func New(cfg *config.Config) error {
+func New() error {
 	pgUser := os.Getenv("POSTGRES_ADMIN_USER")
 	pgPassword := os.Getenv("POSTGRES_ADMIN_PASSWORD")
 	pgHost := os.Getenv("POSTGRES_HOST_NAME")

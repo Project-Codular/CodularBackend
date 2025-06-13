@@ -24,7 +24,7 @@ import (
 
 type Request struct {
 	Code                string `json:"sourceCode" validate:"required"`
-	NoiseLevel          int    `json:"noiseLevel" validate:"required,gte=0,lte=10"`
+	NoiseLevel          int    `json:"noiseLevel" validate:"required,gte=0,lte=100"`
 	ProgrammingLanguage string `json:"programmingLanguage" validate:"required"`
 }
 
@@ -209,7 +209,7 @@ func ProcessCode(code string, noiseLevel int, logger *slog.Logger) (string, erro
 		return "", fmt.Errorf("noises prompt not found")
 	}
 
-	response, err := client.SendChat(systemPrompt, "Уровень шума = "+strconv.Itoa(noiseLevel)+"\n"+code)
+	response, err := client.SendChat(systemPrompt, "Уровень шума = "+strconv.Itoa(noiseLevel)+"/100\n"+code)
 	if err != nil {
 		logger.Error("failed to send request to OpenRouter", sl.Err(err))
 		return "", fmt.Errorf("failed to send request: %v", err)
@@ -217,7 +217,8 @@ func ProcessCode(code string, noiseLevel int, logger *slog.Logger) (string, erro
 	fmt.Println("Response from OpenRouter:", response)
 
 	var decodedLLMResponse LLMResponse
-	err = json.Unmarshal([]byte(response), &decodedLLMResponse)
+	cleanedResponse := openRouterAPI.CleanLLMResponse(response)
+	err = json.Unmarshal([]byte(cleanedResponse), &decodedLLMResponse)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			logger.Error("request body is empty")
