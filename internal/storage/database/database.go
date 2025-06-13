@@ -34,6 +34,13 @@ type SubmissionStatus struct {
 	Hints  []string `json:"hints"`
 }
 
+type Token struct {
+	UserID    int64     `json:"user_id"`
+	Token     string    `json:"token"`
+	Type      string    `json:"type"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
 // CreateUser создаёт нового пользователя
 func (s *Storage) CreateUser(email, passwordHash string) (int64, error) {
 	query := `
@@ -71,39 +78,54 @@ func (s *Storage) GetUserByEmail(email string) (int64, string, error) {
 	return id, passwordHash, nil
 }
 
-// SaveRefreshToken сохраняет refresh-токен для пользователя
-func (s *Storage) SaveRefreshToken(userID int64, refreshToken string) error {
+// SaveToken сохраняет токен в таблице tokens
+func (s *Storage) SaveToken(userID int64, token, tokenType string, expiresAt time.Time) error {
 	query := `
-        UPDATE users
-        SET refresh_token = $1
-        WHERE id = $2
+        INSERT INTO tokens (user_id, token, type, expires_at, created_at)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (token) DO UPDATE
+        SET user_id = EXCLUDED.user_id, type = EXCLUDED.type, expires_at = EXCLUDED.expires_at, created_at = EXCLUDED.created_at
     `
-	result, err := s.db.Exec(context.Background(), query, refreshToken, userID)
+	_, err := s.db.Exec(context.Background(), query, userID, token, tokenType, expiresAt, time.Now().UTC())
 	if err != nil {
-		return fmt.Errorf("failed to save refresh token: %v", err)
-	}
-	if result.RowsAffected() == 0 {
-		return fmt.Errorf("user with ID %d not found", userID)
+		return fmt.Errorf("failed to save token: %v", err)
 	}
 	return nil
 }
 
-// ValidateRefreshToken проверяет валидность refresh-токена
-func (s *Storage) ValidateRefreshToken(userID int64, refreshToken string) (bool, error) {
+// ValidateToken проверяет валидность токена
+func (s *Storage) ValidateToken(token, tokenType string) (int64, bool, error) {
 	query := `
-        SELECT refresh_token
-        FROM users
-        WHERE id = $1
+        SELECT user_id, expires_at
+        FROM tokens
+        WHERE token = $1 AND type = $2
     `
-	var storedToken string
-	err := s.db.QueryRow(context.Background(), query, userID).Scan(&storedToken)
+	var userID int64
+	var expiresAt time.Time
+	err := s.db.QueryRow(context.Background(), query, token, tokenType).Scan(&userID, &expiresAt)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return false, fmt.Errorf("user not found")
+		return 0, false, fmt.Errorf("token not found")
 	}
 	if err != nil {
-		return false, fmt.Errorf("failed to get refresh token: %v", err)
+		return 0, false, fmt.Errorf("failed to validate token: %v", err)
 	}
-	return storedToken == refreshToken, nil
+	if time.Now().After(expiresAt) {
+		return 0, false, fmt.Errorf("token expired")
+	}
+	return userID, true, nil
+}
+
+// DeleteToken удаляет токен из таблицы tokens
+func (s *Storage) DeleteToken(token, tokenType string) error {
+	query := `
+        DELETE FROM tokens
+        WHERE token = $1 AND type = $2
+    `
+	_, err := s.db.Exec(context.Background(), query, token, tokenType)
+	if err != nil {
+		return fmt.Errorf("failed to delete token: %v", err)
+	}
+	return nil
 }
 
 // SetTaskStatus устанавливает статус задачи в Redis по алиасу
@@ -145,7 +167,6 @@ func (s *Storage) SaveSkipsCodeWithAlias(skipsCode string, answers []string, pro
 	}
 	defer tx.Rollback(context.Background())
 
-	// Вставка задачи
 	var taskID int64
 	queryTask := `
         INSERT INTO tasks (user_id, type, taskCode, answers, programming_language_id, created_at)
@@ -158,7 +179,6 @@ func (s *Storage) SaveSkipsCodeWithAlias(skipsCode string, answers []string, pro
 		return 0, 0, fmt.Errorf("failed to insert task: %v", err)
 	}
 
-	// Вставка алиаса
 	var aliasID int64
 	queryAlias := `
 		INSERT INTO aliases (alias, task_id) 
@@ -170,7 +190,6 @@ func (s *Storage) SaveSkipsCodeWithAlias(skipsCode string, answers []string, pro
 		return 0, 0, fmt.Errorf("failed to insert alias: %v", err)
 	}
 
-	// Фиксация транзакции
 	if err := tx.Commit(context.Background()); err != nil {
 		return 0, 0, fmt.Errorf("failed to commit transaction: %v", err)
 	}

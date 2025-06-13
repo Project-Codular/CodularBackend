@@ -1,9 +1,11 @@
 package middleware
 
 import (
+	response_info "codular-backend/lib/api/response"
 	"codular-backend/lib/logger/sl"
 	"context"
-	"github.com/go-chi/chi/v5/middleware"
+	"fmt"
+	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
 	"github.com/golang-jwt/jwt/v5"
 	"log/slog"
@@ -11,82 +13,68 @@ import (
 	"strings"
 )
 
-type contextKey string
+type UserIDKeyType string
 
-const (
-	UserIDKey contextKey = "user_id"
-)
+const UserIDKey UserIDKeyType = "user_id"
 
-func AuthMiddleware(secret string, log *slog.Logger) func(next http.Handler) http.Handler {
+// AuthMiddleware проверяет JWT access-токен
+func AuthMiddleware(jwtSecret string, log *slog.Logger) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			const functionPath = "internal.http_server.middleware.auth.AuthMiddleware"
+			const functionPath = "internal.http_server.middleware.AuthMiddleware"
 
 			log = log.With(
 				slog.String("function_path", functionPath),
-				slog.String("request_id", r.Context().Value(middleware.RequestIDKey).(string)),
+				slog.String("request_id", r.Context().Value(chiMiddleware.RequestIDKey).(string)),
 			)
 
-			// Извлечение токена из заголовка Authorization
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
-				log.Error("authorization header missing")
+				log.Error("missing Authorization header")
 				w.WriteHeader(http.StatusUnauthorized)
-				render.JSON(w, r, map[string]string{"error": "authorization header is required"})
+				render.JSON(w, r, response_info.Error("missing Authorization header"))
 				return
 			}
 
-			// Проверка формата Bearer
-			parts := strings.Split(authHeader, " ")
-			if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-				log.Error("invalid authorization header format")
+			if !strings.HasPrefix(authHeader, "Bearer ") {
+				log.Error("invalid Authorization header format")
 				w.WriteHeader(http.StatusUnauthorized)
-				render.JSON(w, r, map[string]string{"error": "invalid authorization header format"})
+				render.JSON(w, r, response_info.Error("invalid Authorization header format"))
 				return
 			}
 
-			// Парсинг и проверка JWT
-			token, err := jwt.Parse(parts[1], func(token *jwt.Token) (interface{}, error) {
+			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+
+			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-					return nil, jwt.ErrInvalidKey
+					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 				}
-				return []byte(secret), nil
+				return []byte(jwtSecret), nil
 			})
 			if err != nil {
 				log.Error("failed to parse token", sl.Err(err))
 				w.WriteHeader(http.StatusUnauthorized)
-				render.JSON(w, r, map[string]string{"error": "invalid token"})
+				render.JSON(w, r, response_info.Error("invalid or expired token"))
 				return
 			}
 
-			if !token.Valid {
-				log.Error("token is invalid")
+			if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+				userID, ok := claims["user_id"].(float64)
+				if !ok {
+					log.Error("user_id not found in token")
+					w.WriteHeader(http.StatusUnauthorized)
+					render.JSON(w, r, response_info.Error("invalid token"))
+					return
+				}
+
+				// Добавление user_id в контекст
+				ctx := context.WithValue(r.Context(), UserIDKey, int64(userID))
+				next.ServeHTTP(w, r.WithContext(ctx))
+			} else {
+				log.Error("invalid token claims")
 				w.WriteHeader(http.StatusUnauthorized)
-				render.JSON(w, r, map[string]string{"error": "invalid token"})
-				return
+				render.JSON(w, r, response_info.Error("invalid token"))
 			}
-
-			// Извлечение user_id из claims
-			claims, ok := token.Claims.(jwt.MapClaims)
-			if !ok {
-				log.Error("failed to parse claims")
-				w.WriteHeader(http.StatusUnauthorized)
-				render.JSON(w, r, map[string]string{"error": "invalid token claims"})
-				return
-			}
-
-			userIDFloat, ok := claims["user_id"].(float64)
-			if !ok {
-				log.Error("user_id not found in claims")
-				w.WriteHeader(http.StatusUnauthorized)
-				render.JSON(w, r, map[string]string{"error": "user_id not found in token"})
-				return
-			}
-			userID := int64(userIDFloat)
-
-			// Добавление user_id в контекст
-			ctx := context.WithValue(r.Context(), UserIDKey, userID)
-			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }

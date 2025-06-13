@@ -24,30 +24,43 @@ CREATE TABLE IF NOT EXISTS users (
                                      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Create the tokens table if it doesn't exist
+CREATE TABLE IF NOT EXISTS tokens (
+                                      id SERIAL PRIMARY KEY,
+                                      user_id INTEGER NOT NULL,
+                                      token TEXT NOT NULL UNIQUE,
+                                      type TEXT NOT NULL CHECK (type IN ('access', 'refresh')),
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+CREATE INDEX idx_tokens_token ON tokens(token);
+
 -- Create the programming_languages table if it doesn't exist
-CREATE TABLE programming_languages (
-                                       id SERIAL PRIMARY KEY,
-                                       name TEXT NOT NULL UNIQUE
+CREATE TABLE IF NOT EXISTS programming_languages (
+                                                     id SERIAL PRIMARY KEY,
+                                                     name TEXT NOT NULL UNIQUE
 );
 
-INSERT INTO programming_languages (name) VALUES ('Java'), ('Python'), ('C++');
+INSERT INTO programming_languages (name) VALUES ('Java'), ('Python'), ('C++')
+    ON CONFLICT (name) DO NOTHING;
 
 -- Create the tasks table if it doesn't exist
-CREATE TABLE tasks (
-                       id SERIAL PRIMARY KEY,
-                       user_id INTEGER NOT NULL,
-                       type TEXT NOT NULL CHECK (type IN ('skips', 'noises')),
-                       taskCode TEXT NOT NULL,
-                       answers TEXT[] NOT NULL,
-                       programming_language_id INTEGER NOT NULL,
-                       created_at TIMESTAMP NOT NULL,
-                       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                       FOREIGN KEY (programming_language_id) REFERENCES programming_languages(id) ON DELETE RESTRICT,
-                       CHECK (
-                           (type = 'noises' AND array_length(answers, 1) = 1) OR
-                           (type = 'skips' AND array_length(answers, 1) >= 1)
-                           )
-);
+CREATE TABLE IF NOT EXISTS tasks (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('skips', 'noises')),
+    taskCode TEXT NOT NULL,
+    answers TEXT[] NOT NULL,
+    programming_language_id INTEGER NOT NULL,
+    created_at TIMESTAMP NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (programming_language_id) REFERENCES programming_languages(id) ON DELETE RESTRICT,
+    CHECK (
+    (type = 'noises' AND array_length(answers, 1) = 1) OR
+(type = 'skips' AND array_length(answers, 1) >= 1)
+    )
+    );
 
 -- Create the aliases table if it doesn't exist
 CREATE TABLE IF NOT EXISTS aliases (
