@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     answers TEXT[] NOT NULL,
     programming_language_id INTEGER NOT NULL,
     created_at TIMESTAMP NOT NULL,
+    public BOOLEAN NOT NULL DEFAULT FALSE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (programming_language_id) REFERENCES programming_languages(id) ON DELETE RESTRICT,
     CHECK (

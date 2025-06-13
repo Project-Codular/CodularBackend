@@ -75,7 +75,7 @@ func main() {
 	router := chi.NewRouter()
 
 	router.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"https://i-am-a-saw.github.io"},
+		AllowedOrigins:   []string{"https://i-am-a-saw.github.io", "http://172.24.112.1:8082", "http://localhost:3000"},
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization", "X-Requested-With"},
 		AllowCredentials: true,
@@ -103,6 +103,7 @@ func main() {
 			r.Post("/auth/login", auth.Login(logger, storage, jwtSecret))
 			r.Post("/auth/refresh", auth.Refresh(logger, storage, jwtSecret))
 			r.Post("/auth/logout", auth.Logout(logger, storage))
+			r.Get("/task/random", get_task.RandomTask(logger, storage))
 		})
 
 		// Роуты с авторизацией

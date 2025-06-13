@@ -209,6 +209,27 @@ func (s *Storage) GetTaskStatus(alias string) (TaskStatus, error) {
 	return status, nil
 }
 
+// GetRandomPublicTaskAlias возвращает случайный алиас публичной задачи
+func (s *Storage) GetRandomPublicTaskAlias() (string, error) {
+	query := `
+        SELECT aliases.alias
+        FROM aliases
+        JOIN tasks ON aliases.task_id = tasks.id
+        WHERE tasks.public = TRUE
+        ORDER BY RANDOM()
+        LIMIT 1
+    `
+	var alias string
+	err := s.db.QueryRow(context.Background(), query).Scan(&alias)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", fmt.Errorf("no public tasks found")
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to get random public task alias: %v", err)
+	}
+	return alias, nil
+}
+
 // SaveSkipsCodeWithAlias сохраняет код задачи с алиасом и user_id
 func (s *Storage) SaveSkipsCodeWithAlias(skipsCode string, userOriginalCode string, answers []string, programmingLanguageId, userID int64, alias string) (int64, int64, error) {
 	tx, err := s.db.Begin(context.Background())
@@ -219,12 +240,12 @@ func (s *Storage) SaveSkipsCodeWithAlias(skipsCode string, userOriginalCode stri
 
 	var taskID int64
 	queryTask := `
-        INSERT INTO tasks (user_id, type, taskCode, userOriginalCode, answers, programming_language_id, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO tasks (user_id, type, taskCode, userOriginalCode, answers, programming_language_id, created_at, public)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING id
     `
 	createdAt := time.Now().UTC()
-	err = tx.QueryRow(context.Background(), queryTask, userID, "skips", skipsCode, userOriginalCode, answers, programmingLanguageId, createdAt).Scan(&taskID)
+	err = tx.QueryRow(context.Background(), queryTask, userID, "skips", skipsCode, userOriginalCode, answers, programmingLanguageId, createdAt, false).Scan(&taskID)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to insert task: %v", err)
 	}
@@ -257,12 +278,12 @@ func (s *Storage) SaveNoisesCodeWithAlias(noisesCode string, userOriginalCode st
 
 	var taskID int64
 	queryTask := `
-        INSERT INTO tasks (user_id, type, taskCode, userOriginalCode, answers, programming_language_id, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO tasks (user_id, type, taskCode, userOriginalCode, answers, programming_language_id, created_at, public)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING id
     `
 	createdAt := time.Now().UTC()
-	err = tx.QueryRow(context.Background(), queryTask, userID, "noises", noisesCode, userOriginalCode, []string{userOriginalCode}, programmingLanguageId, createdAt).Scan(&taskID)
+	err = tx.QueryRow(context.Background(), queryTask, userID, "noises", noisesCode, userOriginalCode, []string{userOriginalCode}, programmingLanguageId, createdAt, false).Scan(&taskID)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to insert task: %v", err)
 	}
