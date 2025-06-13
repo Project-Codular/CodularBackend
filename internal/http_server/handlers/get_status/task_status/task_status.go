@@ -1,8 +1,8 @@
 package task_status
 
 import (
-	"codium-backend/internal/storage/database"
-	"codium-backend/lib/logger/sl"
+	"codular-backend/internal/storage/database"
+	"codular-backend/lib/logger/sl"
 	"errors"
 	"fmt"
 	"github.com/go-chi/chi/v5"

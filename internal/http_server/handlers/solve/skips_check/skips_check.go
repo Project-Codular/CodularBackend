@@ -1,10 +1,10 @@
 package skips_check
 
 import (
-	"codium-backend/internal/config"
-	openRouterAPI "codium-backend/lib/api/openrouter"
-	response_info "codium-backend/lib/api/response"
-	"codium-backend/lib/logger/sl"
+	"codular-backend/internal/storage/database"
+	openRouterAPI "codular-backend/lib/api/openrouter"
+	response_info "codular-backend/lib/api/response"
+	"codular-backend/lib/logger/sl"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
@@ -91,7 +91,7 @@ func getOKResponse(submissionID int64) *ServerResponse {
 // @Failure 404 {object} ServerResponse "Task not found"
 // @Failure 500 {object} ServerResponse "Internal server error"
 // @Router /skips/solve [post]
-func New(log *slog.Logger, submissionStorage SubmissionStorage, taskStorage TasksStorage, aliasChecker AliasChecker, cfg *config.Config) http.HandlerFunc {
+func New(log *slog.Logger, storage *database.Storage) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		const functionPath = "internal.http_server.handlers.solve.skips_check.New"
 
@@ -129,7 +129,7 @@ func New(log *slog.Logger, submissionStorage SubmissionStorage, taskStorage Task
 		}
 
 		// Проверка существования задачи (опционально)
-		exists, err := aliasChecker.CheckAliasExist(decodedRequest.TaskAlias)
+		exists, err := storage.CheckAliasExist(decodedRequest.TaskAlias)
 		if err != nil || !exists {
 			log.Error("task not found", sl.Err(err))
 			writer.WriteHeader(http.StatusNotFound)
@@ -138,7 +138,7 @@ func New(log *slog.Logger, submissionStorage SubmissionStorage, taskStorage Task
 		}
 
 		// Сохранение посылки
-		submissionID, err := submissionStorage.SavePendingSubmission(decodedRequest.TaskAlias, decodedRequest.Answers)
+		submissionID, err := storage.SavePendingSubmission(decodedRequest.TaskAlias, decodedRequest.Answers)
 		if err != nil {
 			log.Error("failed to save submission", sl.Err(err))
 			writer.WriteHeader(http.StatusInternalServerError)
@@ -155,30 +155,30 @@ func New(log *slog.Logger, submissionStorage SubmissionStorage, taskStorage Task
 		render.JSON(writer, request, response)
 
 		// Асинхронная обработка
-		go processSubmissionAsync(log, taskStorage, submissionStorage, decodedRequest.TaskAlias, submissionID, decodedRequest.Answers)
+		go processSubmissionAsync(log, storage, decodedRequest.TaskAlias, submissionID, decodedRequest.Answers)
 
 		log.Info("submission processing initiated", slog.Int64("submission_id", submissionID))
 	}
 }
 
 // processTaskAsync асинхронно обрабатывает задачу и сохраняет результат
-func processSubmissionAsync(log *slog.Logger, tasksStorage TasksStorage, submissionStorage SubmissionStorage, taskAlias string, submissionID int64, userAnswers []string) {
+func processSubmissionAsync(log *slog.Logger, storage *database.Storage, taskAlias string, submissionID int64, userAnswers []string) {
 	log = log.With(slog.Int64("submission_id", submissionID))
 
-	correctAnswers, err := tasksStorage.GetCodeAnswers(taskAlias)
+	correctAnswers, err := storage.GetCodeAnswers(taskAlias)
 	if err != nil {
 		log.Error("Got error while getting correct answers: " + err.Error())
-		err := submissionStorage.UpdateSubmissionStatusToFailed(submissionID)
+		err := storage.UpdateSubmissionStatusToFailed(submissionID)
 		if err != nil {
 			log.Error("Error processing submission" + strconv.FormatInt(submissionID, 10) + " while setting Failed status: " + err.Error())
 			return
 		}
 	}
 
-	skipsCode, err := tasksStorage.GetSavedCode(taskAlias)
+	skipsCode, err := storage.GetSavedCode(taskAlias)
 	if err != nil {
 		log.Error("Got error while getting saved code: " + err.Error())
-		err := submissionStorage.UpdateSubmissionStatusToFailed(submissionID)
+		err := storage.UpdateSubmissionStatusToFailed(submissionID)
 		if err != nil {
 			log.Error("Error processing submission" + strconv.FormatInt(submissionID, 10) + " while setting Failed status: " + err.Error())
 			return
@@ -188,7 +188,7 @@ func processSubmissionAsync(log *slog.Logger, tasksStorage TasksStorage, submiss
 	llmResponse, err := processSubmission(correctAnswers, userAnswers, skipsCode, log)
 	if err != nil {
 		log.Error("Got error while processing submission: " + err.Error())
-		err := submissionStorage.UpdateSubmissionStatusToFailed(submissionID)
+		err := storage.UpdateSubmissionStatusToFailed(submissionID)
 		if err != nil {
 			log.Error("Error processing submission" + strconv.FormatInt(submissionID, 10) + " while setting Failed status: " + err.Error())
 			return
@@ -196,7 +196,7 @@ func processSubmissionAsync(log *slog.Logger, tasksStorage TasksStorage, submiss
 	}
 	if &llmResponse == nil {
 		log.Error("Got nil llm response")
-		err := submissionStorage.UpdateSubmissionStatusToFailed(submissionID)
+		err := storage.UpdateSubmissionStatusToFailed(submissionID)
 		if err != nil {
 			log.Error("Error processing submission" + strconv.FormatInt(submissionID, 10) + " while setting Failed status: " + err.Error())
 			return
@@ -207,10 +207,10 @@ func processSubmissionAsync(log *slog.Logger, tasksStorage TasksStorage, submiss
 	log.Info("Processed LLM.", slog.Any("hints", llmResponse.Hints), slog.String("status", llmResponse.Status))
 
 	if llmResponse.Status == "ok" {
-		err = submissionStorage.UpdateSubmissionStatusToSuccess(submissionID)
+		err = storage.UpdateSubmissionStatusToSuccess(submissionID)
 		if err != nil {
 			log.Error("Got error while setting submission to success: " + err.Error())
-			err := submissionStorage.UpdateSubmissionStatusToFailed(submissionID)
+			err := storage.UpdateSubmissionStatusToFailed(submissionID)
 			if err != nil {
 				log.Error("Error processing submission" + strconv.FormatInt(submissionID, 10) + " while setting Failed status: " + err.Error())
 				return
@@ -224,13 +224,13 @@ func processSubmissionAsync(log *slog.Logger, tasksStorage TasksStorage, submiss
 		}
 		log.Info("Processed LLM.", slog.Any("hints", llmResponse.Hints), slog.String("status", llmResponse.Status))
 
-		err := submissionStorage.UpdateSubmissionStatusToFailedWithHints(
+		err := storage.UpdateSubmissionStatusToFailedWithHints(
 			submissionID,
 			hints,
 		)
 		if err != nil {
 			log.Error("Got error while setting submission to failed: " + err.Error())
-			err := submissionStorage.UpdateSubmissionStatusToFailed(submissionID)
+			err := storage.UpdateSubmissionStatusToFailed(submissionID)
 			if err != nil {
 				log.Error("Error processing submission" + strconv.FormatInt(submissionID, 10) + " while setting Failed status: " + err.Error())
 				return

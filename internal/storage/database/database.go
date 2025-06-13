@@ -1,8 +1,8 @@
 package database
 
 import (
-	"codium-backend/internal/config"
-	"codium-backend/internal/storage"
+	"codular-backend/internal/config"
+	"codular-backend/internal/storage"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"log"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -29,9 +30,80 @@ type TaskStatus struct {
 }
 
 type SubmissionStatus struct {
-	Status string `json:"status"`
-	Result string `json:"result,omitempty"`
-	Error  string `json:"error,omitempty"`
+	Status string   `json:"status"`
+	Hints  []string `json:"hints"`
+}
+
+// CreateUser создаёт нового пользователя
+func (s *Storage) CreateUser(email, passwordHash string) (int64, error) {
+	query := `
+        INSERT INTO users (email, password_hash, created_at)
+        VALUES ($1, $2, $3)
+        RETURNING id
+    `
+	var id int64
+	err := s.db.QueryRow(context.Background(), query, email, passwordHash, time.Now().UTC()).Scan(&id)
+	if err != nil {
+		if strings.Contains(err.Error(), "unique constraint") {
+			return 0, fmt.Errorf("email already exists")
+		}
+		return 0, fmt.Errorf("failed to create user: %v", err)
+	}
+	return id, nil
+}
+
+// GetUserByEmail возвращает пользователя по email
+func (s *Storage) GetUserByEmail(email string) (int64, string, error) {
+	query := `
+        SELECT id, password_hash
+        FROM users
+        WHERE email = $1
+    `
+	var id int64
+	var passwordHash string
+	err := s.db.QueryRow(context.Background(), query, email).Scan(&id, &passwordHash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, "", fmt.Errorf("user not found")
+	}
+	if err != nil {
+		return 0, "", fmt.Errorf("failed to get user: %v", err)
+	}
+	return id, passwordHash, nil
+}
+
+// SaveRefreshToken сохраняет refresh-токен для пользователя
+func (s *Storage) SaveRefreshToken(userID int64, refreshToken string) error {
+	query := `
+        UPDATE users
+        SET refresh_token = $1
+        WHERE id = $2
+    `
+	result, err := s.db.Exec(context.Background(), query, refreshToken, userID)
+	if err != nil {
+		return fmt.Errorf("failed to save refresh token: %v", err)
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("user with ID %d not found", userID)
+	}
+	return nil
+}
+
+// ValidateRefreshToken проверяет валидность refresh-токена
+func (s *Storage) ValidateRefreshToken(userID int64, refreshToken string) (bool, error) {
+	query := `
+        SELECT refresh_token
+        FROM users
+        WHERE id = $1
+    `
+	var storedToken string
+	err := s.db.QueryRow(context.Background(), query, userID).Scan(&storedToken)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, fmt.Errorf("user not found")
+	}
+	if err != nil {
+		return false, fmt.Errorf("failed to get refresh token: %v", err)
+	}
+	return storedToken == refreshToken, nil
 }
 
 // SetTaskStatus устанавливает статус задачи в Redis по алиасу
@@ -65,7 +137,8 @@ func (s *Storage) GetTaskStatus(alias string) (TaskStatus, error) {
 	return status, nil
 }
 
-func (s *Storage) SaveSkipsCodeWithAlias(skipsCode string, answers []string, programmingLanguageId int64, alias string) (int64, int64, error) {
+// SaveSkipsCodeWithAlias сохраняет код задачи с алиасом и user_id
+func (s *Storage) SaveSkipsCodeWithAlias(skipsCode string, answers []string, programmingLanguageId, userID int64, alias string) (int64, int64, error) {
 	tx, err := s.db.Begin(context.Background())
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to begin transaction: %v", err)
@@ -75,12 +148,12 @@ func (s *Storage) SaveSkipsCodeWithAlias(skipsCode string, answers []string, pro
 	// Вставка задачи
 	var taskID int64
 	queryTask := `
-        INSERT INTO tasks (type, taskCode, answers, programming_language_id, created_at)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO tasks (user_id, type, taskCode, answers, programming_language_id, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id
     `
 	createdAt := time.Now().UTC()
-	err = tx.QueryRow(context.Background(), queryTask, "skips", skipsCode, answers, programmingLanguageId, createdAt).Scan(&taskID)
+	err = tx.QueryRow(context.Background(), queryTask, userID, "skips", skipsCode, answers, programmingLanguageId, createdAt).Scan(&taskID)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to insert task: %v", err)
 	}
@@ -157,7 +230,7 @@ func (s *Storage) GetSavedCode(alias string) (string, error) {
 		SELECT tasks.taskCode
 		FROM aliases
 		JOIN tasks ON aliases.task_id = tasks.id
-		WHERE aliases.alias = $1;
+		WHERE aliases.alias = $1
 	`
 	var savedCode string
 	err := s.db.QueryRow(context.Background(), query, alias).Scan(&savedCode)
@@ -165,7 +238,7 @@ func (s *Storage) GetSavedCode(alias string) (string, error) {
 		return "", storage.ErrCodeNotFound
 	}
 	if err != nil {
-		return "", fmt.Errorf("failed to get_task skips code: %v", err)
+		return "", fmt.Errorf("failed to get skips code: %v", err)
 	}
 	return savedCode, nil
 }
@@ -175,7 +248,7 @@ func (s *Storage) GetCodeAnswers(codeAlias string) ([]string, error) {
 		SELECT tasks.answers
 		FROM aliases
 		JOIN tasks ON aliases.task_id = tasks.id
-		WHERE aliases.alias = $1;
+		WHERE aliases.alias = $1
 	`
 	var answers []string
 	err := s.db.QueryRow(context.Background(), query, codeAlias).Scan(&answers)
@@ -183,19 +256,26 @@ func (s *Storage) GetCodeAnswers(codeAlias string) ([]string, error) {
 		return []string{}, storage.ErrCodeNotFound
 	}
 	if err != nil {
-		return []string{}, fmt.Errorf("failed to get_task skips code: %v", err)
+		return []string{}, fmt.Errorf("failed to get skips code: %v", err)
 	}
 	return answers, nil
 }
 
+// SavePendingSubmission сохраняет новую посылку
 func (s *Storage) SavePendingSubmission(taskAlias string, submissionCode []string) (int64, error) {
 	query := `
-        INSERT INTO submissions (task_alias, submission_code, status, hints)
-        VALUES ($1, $2, 'Pending', '{}')  -- Начальное значение hints - пустой массив
+        INSERT INTO submissions (task_alias, submission_code, status, hints, submitted_at)
+        VALUES ($1, $2, 'Pending', NULL, $3)
         RETURNING id
     `
 	var id int64
-	err := s.db.QueryRow(context.Background(), query, taskAlias, submissionCode).Scan(&id)
+	var codeVal interface{}
+	if len(submissionCode) == 0 {
+		codeVal = nil
+	} else {
+		codeVal = submissionCode
+	}
+	err := s.db.QueryRow(context.Background(), query, taskAlias, codeVal, time.Now().UTC()).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("failed to save submission: %v", err)
 	}
@@ -219,7 +299,6 @@ func (s *Storage) GetSubmissionStatus(submissionID int64) (string, error) {
 	return status, nil
 }
 
-// UpdateSubmissionStatusToFailed обновляет статус посылки на "Failed"
 func (s *Storage) UpdateSubmissionStatusToFailed(submissionID int64) error {
 	query := `
         UPDATE submissions
@@ -236,7 +315,6 @@ func (s *Storage) UpdateSubmissionStatusToFailed(submissionID int64) error {
 	return nil
 }
 
-// UpdateSubmissionStatusToSuccess обновляет статус посылки на "Success"
 func (s *Storage) UpdateSubmissionStatusToSuccess(submissionID int64) error {
 	query := `
         UPDATE submissions
@@ -253,14 +331,19 @@ func (s *Storage) UpdateSubmissionStatusToSuccess(submissionID int64) error {
 	return nil
 }
 
-// UpdateSubmissionStatusToFailedWithHints обновляет статус посылки на "Failed" и устанавливает подсказки
 func (s *Storage) UpdateSubmissionStatusToFailedWithHints(submissionID int64, hints []string) error {
 	query := `
         UPDATE submissions
         SET status = 'Failed', hints = $2
         WHERE id = $1
     `
-	result, err := s.db.Exec(context.Background(), query, submissionID, hints)
+	var hintsVal interface{}
+	if len(hints) == 0 {
+		hintsVal = nil
+	} else {
+		hintsVal = hints
+	}
+	result, err := s.db.Exec(context.Background(), query, submissionID, hintsVal)
 	if err != nil {
 		return fmt.Errorf("failed to update submission status to Failed with hints: %v", err)
 	}
@@ -270,10 +353,26 @@ func (s *Storage) UpdateSubmissionStatusToFailedWithHints(submissionID int64, hi
 	return nil
 }
 
-// GetSubmissionHints возвращает подсказки посылки по её ID
+func (s *Storage) GetSubmissionStatusAndHints(submissionID int64) (SubmissionStatus, error) {
+	query := `
+        SELECT status, COALESCE(hints, '{}')
+        FROM submissions
+        WHERE id = $1
+    `
+	var status SubmissionStatus
+	err := s.db.QueryRow(context.Background(), query, submissionID).Scan(&status.Status, &status.Hints)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return SubmissionStatus{}, fmt.Errorf("submission not found")
+	}
+	if err != nil {
+		return SubmissionStatus{}, fmt.Errorf("failed to get submission status and hints: %v", err)
+	}
+	return status, nil
+}
+
 func (s *Storage) GetSubmissionHints(submissionID int64) ([]string, error) {
 	query := `
-        SELECT hints
+        SELECT COALESCE(hints, '{}')
         FROM submissions
         WHERE id = $1
     `
@@ -289,7 +388,6 @@ func (s *Storage) GetSubmissionHints(submissionID int64) ([]string, error) {
 }
 
 func New(cfg *config.Config) error {
-	// Чтение PostgreSQL настроек из .env
 	pgUser := os.Getenv("POSTGRES_ADMIN_USER")
 	pgPassword := os.Getenv("POSTGRES_ADMIN_PASSWORD")
 	pgHost := os.Getenv("POSTGRES_HOST_NAME")
@@ -314,7 +412,6 @@ func New(cfg *config.Config) error {
 		return fmt.Errorf("unable to ping database: %v", err)
 	}
 
-	// Чтение Redis настроек из .env
 	redisHost := os.Getenv("REDIS_HOSTNAME")
 	redisPort := os.Getenv("REDIS_PORT")
 	redisPassword := os.Getenv("REDIS_PASSWORD")

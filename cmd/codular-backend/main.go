@@ -1,18 +1,18 @@
 package main
 
 import (
-	_ "codium-backend/docs"
-	"codium-backend/internal/config"
-	"codium-backend/internal/http_server/handlers/auth"
-	"codium-backend/internal/http_server/handlers/generate/noises"
-	"codium-backend/internal/http_server/handlers/generate/skips"
-	"codium-backend/internal/http_server/handlers/get_status/submission_status"
-	"codium-backend/internal/http_server/handlers/get_status/task_status"
-	"codium-backend/internal/http_server/handlers/get_task"
-	"codium-backend/internal/http_server/handlers/solve/skips_check"
-	"codium-backend/internal/http_server/middleware"
-	"codium-backend/internal/storage/database"
-	"codium-backend/lib/logger/handlers/slogpretty"
+	_ "codular-backend/docs"
+	"codular-backend/internal/config"
+	"codular-backend/internal/http_server/handlers/auth"
+	"codular-backend/internal/http_server/handlers/generate/noises"
+	"codular-backend/internal/http_server/handlers/generate/skips"
+	"codular-backend/internal/http_server/handlers/get_status/submission_status"
+	"codular-backend/internal/http_server/handlers/get_status/task_status"
+	"codular-backend/internal/http_server/handlers/get_task"
+	"codular-backend/internal/http_server/handlers/solve/skips_check"
+	"codular-backend/internal/http_server/middleware"
+	"codular-backend/internal/storage/database"
+	"codular-backend/lib/logger/handlers/slogpretty"
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
@@ -100,6 +100,7 @@ func main() {
 		r.Group(func(r chi.Router) {
 			r.Post("/auth/register", auth.Register(logger, storage, jwtSecret))
 			r.Post("/auth/login", auth.Login(logger, storage, jwtSecret))
+			r.Post("/auth/refresh", auth.Refresh(logger, storage, jwtSecret))
 		})
 
 		// Роуты с авторизацией

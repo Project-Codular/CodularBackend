@@ -1,9 +1,9 @@
 package submission_status
 
 import (
-	"codium-backend/internal/storage/database"
-	response_info "codium-backend/lib/api/response"
-	"codium-backend/lib/logger/sl"
+	"codular-backend/internal/storage/database"
+	response_info "codular-backend/lib/api/response"
+	"codular-backend/lib/logger/sl"
 	"errors"
 	"fmt"
 	"github.com/go-chi/chi/v5"

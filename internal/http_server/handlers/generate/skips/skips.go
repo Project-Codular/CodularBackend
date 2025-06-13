@@ -1,21 +1,21 @@
 package skips
 
 import (
-	"codium-backend/internal/config"
-	database "codium-backend/internal/storage/database"
-	openRouterAPI "codium-backend/lib/api/openrouter"
-	response_info "codium-backend/lib/api/response"
-	"codium-backend/lib/logger/sl"
+	"codular-backend/internal/config"
+	my_middleware "codular-backend/internal/http_server/middleware"
+	database "codular-backend/internal/storage/database"
+	openRouterAPI "codular-backend/lib/api/openrouter"
+	response_info "codular-backend/lib/api/response"
+	"codular-backend/lib/logger/sl"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/go-chi/chi/v5/middleware"
+	chi_middleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/render"
 	"github.com/go-playground/validator/v10"
 	"io"
-	"log"
 	"log/slog"
 	"net/http"
 	"os"
@@ -36,21 +36,6 @@ type Response struct {
 type LLMResponse struct {
 	SkipsCode string   `json:"skipsCode"`
 	Answers   []string `json:"answers"`
-}
-
-//go:generate go run github.com/vektra/mockery/v2@v2.53.3 --name=SkipsGenerator
-type SkipsGenerator interface {
-	SaveSkipsCodeWithAlias(skipsCode string, answers []string, programmingLanguageId int64, alias string) (int64, int64, error)
-	GetProgrammingLanguageIDByName(name string) (int64, error)
-}
-
-//go:generate go run github.com/vektra/mockery/v2@v2.53.3 --name=TasksProvider
-type TasksProvider interface {
-	GetSavedCode(alias string) (string, error)
-}
-
-type AliasChecker interface {
-	CheckAliasExist(alias string) (bool, error)
 }
 
 func getErrorResponse(msg string) *Response {
@@ -86,14 +71,23 @@ func getOKResponse(taskAlias string) *Response {
 // @Failure 400 {object} Response "Invalid request or empty body"
 // @Failure 500 {object} Response "Internal server error"
 // @Router /skips/generate [post]
-func New(log *slog.Logger, skipsGenerator SkipsGenerator, aliasChecker AliasChecker, cfg *config.Config) http.HandlerFunc {
+func New(log *slog.Logger, storage *database.Storage, cfg *config.Config) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		const functionPath = "internal.http_server.handlers.generate.skips.New"
 
 		log = log.With(
 			slog.String("function_path", functionPath),
-			slog.String("request_id", middleware.GetReqID(request.Context())),
+			slog.String("request_id", chi_middleware.GetReqID(request.Context())),
 		)
+
+		// Извлечение user_id из контекста
+		userID, ok := request.Context().Value(my_middleware.UserIDKey).(int64)
+		if !ok {
+			log.Error("failed to get user_id from context")
+			writer.WriteHeader(http.StatusUnauthorized)
+			render.JSON(writer, request, getErrorResponse("unauthorized"))
+			return
+		}
 
 		var decodedRequest Request
 		err := render.DecodeJSON(request.Body, &decodedRequest)
@@ -123,7 +117,7 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, aliasChecker AliasChec
 			}
 		}
 
-		programmingLanguageId, err := skipsGenerator.GetProgrammingLanguageIDByName(decodedRequest.ProgrammingLanguage)
+		programmingLanguageId, err := storage.GetProgrammingLanguageIDByName(decodedRequest.ProgrammingLanguage)
 		if err != nil {
 			log.Error("invalid programming language: "+decodedRequest.ProgrammingLanguage, sl.Err(err))
 			writer.WriteHeader(http.StatusBadRequest)
@@ -136,7 +130,7 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, aliasChecker AliasChec
 		var alias string
 		for aliasExistsInDb {
 			alias = generateAlias(cfg.AliasLength)
-			aliasExistsInDb, err = aliasChecker.CheckAliasExist(alias)
+			aliasExistsInDb, err = storage.CheckAliasExist(alias)
 			if err != nil {
 				log.Error("failed to check alias "+alias+" existence in db", sl.Err(err))
 				writer.WriteHeader(http.StatusInternalServerError)
@@ -147,7 +141,7 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, aliasChecker AliasChec
 
 		// Сохранение начального статуса "Processing" в Redis
 		initialStatus := database.TaskStatus{Status: "Processing"}
-		if err := database.DB.SetTaskStatus(alias, initialStatus); err != nil {
+		if err := storage.SetTaskStatus(alias, initialStatus); err != nil {
 			log.Error("failed to set initial status in Redis", sl.Err(err))
 			writer.WriteHeader(http.StatusInternalServerError)
 			render.JSON(writer, request, getErrorResponse("internal server error"))
@@ -159,32 +153,32 @@ func New(log *slog.Logger, skipsGenerator SkipsGenerator, aliasChecker AliasChec
 		render.JSON(writer, request, getOKResponse(alias))
 
 		// Асинхронная обработка
-		go processTaskAsync(log, alias, alias, decodedRequest.Code, decodedRequest.SkipsNumber, programmingLanguageId, skipsGenerator)
+		go processTaskAsync(log, alias, decodedRequest.Code, decodedRequest.SkipsNumber, programmingLanguageId, userID, storage)
 
-		log.Info("task processing initiated", slog.String("task_alias", alias))
+		log.Info("task processing initiated", slog.String("task_alias", alias), slog.Int64("user_id", userID))
 	}
 }
 
 // processTaskAsync асинхронно обрабатывает задачу и сохраняет результат
-func processTaskAsync(log *slog.Logger, taskAlias string, alias, code string, skipsNumber int, programmingLanguageId int64, skipsGenerator SkipsGenerator) {
-	log = log.With(slog.String("task_alias", taskAlias))
+func processTaskAsync(log *slog.Logger, alias, code string, skipsNumber int, programmingLanguageId, userID int64, storage *database.Storage) {
+	log = log.With(slog.String("task_alias", alias), slog.Int64("user_id", userID))
 
 	processedCode, answers, err := processCode(code, skipsNumber, log)
 	if err != nil {
 		// Обновление статуса на "Error" в случае ошибки
 		errorStatus := database.TaskStatus{Status: "Error", Error: err.Error()}
-		if err := database.DB.SetTaskStatus(alias, errorStatus); err != nil {
+		if err := storage.SetTaskStatus(alias, errorStatus); err != nil {
 			log.Error("failed to set error status in Redis", sl.Err(err))
 		}
 		return
 	}
 
 	// Сохранение в PostgreSQL
-	_, _, err = skipsGenerator.SaveSkipsCodeWithAlias(processedCode, answers, programmingLanguageId, alias)
+	_, _, err = storage.SaveSkipsCodeWithAlias(processedCode, answers, programmingLanguageId, userID, alias)
 	if err != nil {
 		// Обновление статуса на "Error" в случае ошибки сохранения
 		errorStatus := database.TaskStatus{Status: "Error", Error: fmt.Sprintf("failed to save task: %v", err)}
-		if err := database.DB.SetTaskStatus(alias, errorStatus); err != nil {
+		if err := storage.SetTaskStatus(alias, errorStatus); err != nil {
 			log.Error("failed to set error status in Redis", sl.Err(err))
 		}
 		return
@@ -192,7 +186,7 @@ func processTaskAsync(log *slog.Logger, taskAlias string, alias, code string, sk
 
 	// Обновление статуса на "Done" при успехе
 	doneStatus := database.TaskStatus{Status: "Done", Result: processedCode}
-	if err := database.DB.SetTaskStatus(alias, doneStatus); err != nil {
+	if err := storage.SetTaskStatus(alias, doneStatus); err != nil {
 		log.Error("failed to set done status in Redis", sl.Err(err))
 	}
 }
@@ -206,17 +200,20 @@ func processCode(code string, number int, logger *slog.Logger) (string, []string
 
 	prompts, err := openRouterAPI.LoadSystemPrompts("./config/system_prompts.yaml")
 	if err != nil {
-		log.Fatalf("Error loading system prompts: %v", err)
+		logger.Error("failed to load system prompts", sl.Err(err))
+		return "", []string{}, fmt.Errorf("failed to load system prompts: %v", err)
 	}
 
 	systemPrompt, exists := prompts["system_prompt"]
 	if !exists {
-		log.Fatalf("System prompt not found in the YAML file")
+		logger.Error("system prompt not found in YAML file")
+		return "", []string{}, fmt.Errorf("system prompt not found")
 	}
 
 	response, err := client.SendChat(systemPrompt, "Число пропусков = "+strconv.Itoa(number)+"\n"+code)
 	if err != nil {
-		log.Fatalf("Error sending request: %v", err)
+		logger.Error("failed to send request to OpenRouter", sl.Err(err))
+		return "", []string{}, fmt.Errorf("failed to send request: %v", err)
 	}
 	fmt.Println("Response from OpenRouter:", response)
 
@@ -230,7 +227,7 @@ func processCode(code string, number int, logger *slog.Logger) (string, []string
 			return "", []string{}, fmt.Errorf("request body is empty")
 		} else {
 			logger.Error("failed to decode request body", sl.Err(err))
-			return "", []string{}, fmt.Errorf(err.Error())
+			return "", []string{}, fmt.Errorf("failed to decode request: %v", err)
 		}
 	}
 
