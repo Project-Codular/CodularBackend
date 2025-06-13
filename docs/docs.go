@@ -24,6 +24,208 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/auth/login": {
+            "post": {
+                "description": "Authenticates a user with email and password, returning access and refresh tokens.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Login user",
+                "parameters": [
+                    {
+                        "description": "User email and password",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "User logged in successfully",
+                        "schema": {
+                            "$ref": "#/definitions/auth.AuthResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or empty body",
+                        "schema": {
+                            "$ref": "#/definitions/auth.AuthResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid credentials",
+                        "schema": {
+                            "$ref": "#/definitions/auth.AuthResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/auth.AuthResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/refresh": {
+            "post": {
+                "description": "Refreshes the access token using a valid refresh token.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Refresh access token",
+                "parameters": [
+                    {
+                        "description": "Refresh token",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.RefreshRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Access token refreshed successfully",
+                        "schema": {
+                            "$ref": "#/definitions/auth.AuthResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or empty body",
+                        "schema": {
+                            "$ref": "#/definitions/auth.AuthResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or expired refresh token",
+                        "schema": {
+                            "$ref": "#/definitions/auth.AuthResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/auth.AuthResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/register": {
+            "post": {
+                "description": "Registers a new user with email and password, returning access and refresh tokens.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Auth"
+                ],
+                "summary": "Register a new user",
+                "parameters": [
+                    {
+                        "description": "User email and password",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.RegisterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "User registered successfully",
+                        "schema": {
+                            "$ref": "#/definitions/auth.AuthResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or empty body",
+                        "schema": {
+                            "$ref": "#/definitions/auth.AuthResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Email already exists",
+                        "schema": {
+                            "$ref": "#/definitions/auth.AuthResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/auth.AuthResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/noises/generate": {
+            "post": {
+                "description": "Processes the provided source code with a specified level of noise, generates a unique alias, and saves it to the database.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Noise"
+                ],
+                "summary": "Generate and save noise for code",
+                "parameters": [
+                    {
+                        "description": "Source code and level of noise",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/noises.Request"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully generated and saved noise",
+                        "schema": {
+                            "$ref": "#/definitions/noises.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or empty body",
+                        "schema": {
+                            "$ref": "#/definitions/noises.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/noises.Response"
+                        }
+                    }
+                }
+            }
+        },
         "/skips/generate": {
             "post": {
                 "description": "Processes the provided source code with a specified number of skips, generates a unique alias, and saves initial status to Redis. Returns the task alias for status checking.",
@@ -259,6 +461,62 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "auth.AuthResponse": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "refresh_token": {
+                    "type": "string"
+                },
+                "responseInfo": {
+                    "$ref": "#/definitions/response_info.ResponseInfo"
+                }
+            }
+        },
+        "auth.LoginRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "password"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.RefreshRequest": {
+            "type": "object",
+            "required": [
+                "refresh_token"
+            ],
+            "properties": {
+                "refresh_token": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.RegisterRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "password"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string",
+                    "minLength": 8
+                }
+            }
+        },
         "get_task.Response": {
             "type": "object",
             "properties": {
@@ -267,6 +525,38 @@ const docTemplate = `{
                 },
                 "responseInfo": {
                     "$ref": "#/definitions/response_info.ResponseInfo"
+                }
+            }
+        },
+        "noises.Request": {
+            "type": "object",
+            "required": [
+                "noiseLevel",
+                "programmingLanguage",
+                "sourceCode"
+            ],
+            "properties": {
+                "noiseLevel": {
+                    "type": "integer",
+                    "maximum": 10,
+                    "minimum": 0
+                },
+                "programmingLanguage": {
+                    "type": "string"
+                },
+                "sourceCode": {
+                    "type": "string"
+                }
+            }
+        },
+        "noises.Response": {
+            "type": "object",
+            "properties": {
+                "responseInfo": {
+                    "$ref": "#/definitions/response_info.ResponseInfo"
+                },
+                "taskAlias": {
+                    "type": "string"
                 }
             }
         },
@@ -374,6 +664,13 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
+        }
+    },
+    "securityDefinitions": {
+        "Bearer": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
         }
     }
 }`

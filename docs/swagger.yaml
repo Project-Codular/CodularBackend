@@ -1,11 +1,70 @@
 basePath: /api/v1
 definitions:
+  auth.AuthResponse:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+      responseInfo:
+        $ref: '#/definitions/response_info.ResponseInfo'
+    type: object
+  auth.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  auth.RefreshRequest:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  auth.RegisterRequest:
+    properties:
+      email:
+        type: string
+      password:
+        minLength: 8
+        type: string
+    required:
+    - email
+    - password
+    type: object
   get_task.Response:
     properties:
       codeToSolve:
         type: string
       responseInfo:
         $ref: '#/definitions/response_info.ResponseInfo'
+    type: object
+  noises.Request:
+    properties:
+      noiseLevel:
+        maximum: 10
+        minimum: 0
+        type: integer
+      programmingLanguage:
+        type: string
+      sourceCode:
+        type: string
+    required:
+    - noiseLevel
+    - programmingLanguage
+    - sourceCode
+    type: object
+  noises.Response:
+    properties:
+      responseInfo:
+        $ref: '#/definitions/response_info.ResponseInfo'
+      taskAlias:
+        type: string
     type: object
   response_info.ResponseInfo:
     properties:
@@ -91,6 +150,141 @@ info:
   title: Codular API
   version: "1.0"
 paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates a user with email and password, returning access
+        and refresh tokens.
+      parameters:
+      - description: User email and password
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User logged in successfully
+          schema:
+            $ref: '#/definitions/auth.AuthResponse'
+        "400":
+          description: Invalid request or empty body
+          schema:
+            $ref: '#/definitions/auth.AuthResponse'
+        "401":
+          description: Invalid credentials
+          schema:
+            $ref: '#/definitions/auth.AuthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/auth.AuthResponse'
+      summary: Login user
+      tags:
+      - Auth
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Refreshes the access token using a valid refresh token.
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.RefreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Access token refreshed successfully
+          schema:
+            $ref: '#/definitions/auth.AuthResponse'
+        "400":
+          description: Invalid request or empty body
+          schema:
+            $ref: '#/definitions/auth.AuthResponse'
+        "401":
+          description: Invalid or expired refresh token
+          schema:
+            $ref: '#/definitions/auth.AuthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/auth.AuthResponse'
+      summary: Refresh access token
+      tags:
+      - Auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Registers a new user with email and password, returning access
+        and refresh tokens.
+      parameters:
+      - description: User email and password
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User registered successfully
+          schema:
+            $ref: '#/definitions/auth.AuthResponse'
+        "400":
+          description: Invalid request or empty body
+          schema:
+            $ref: '#/definitions/auth.AuthResponse'
+        "409":
+          description: Email already exists
+          schema:
+            $ref: '#/definitions/auth.AuthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/auth.AuthResponse'
+      summary: Register a new user
+      tags:
+      - Auth
+  /noises/generate:
+    post:
+      consumes:
+      - application/json
+      description: Processes the provided source code with a specified level of noise,
+        generates a unique alias, and saves it to the database.
+      parameters:
+      - description: Source code and level of noise
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/noises.Request'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Successfully generated and saved noise
+          schema:
+            $ref: '#/definitions/noises.Response'
+        "400":
+          description: Invalid request or empty body
+          schema:
+            $ref: '#/definitions/noises.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/noises.Response'
+      summary: Generate and save noise for code
+      tags:
+      - Noise
   /skips/generate:
     post:
       consumes:
@@ -252,4 +446,9 @@ paths:
       summary: Get task by alias
       tags:
       - Tasks
+securityDefinitions:
+  Bearer:
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"
