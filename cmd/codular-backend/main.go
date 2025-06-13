@@ -1,19 +1,22 @@
 package main
 
 import (
-	_ "codium-backend/docs" // Import generated Swagger docs
+	_ "codium-backend/docs"
 	"codium-backend/internal/config"
+	"codium-backend/internal/http_server/handlers/auth"
 	"codium-backend/internal/http_server/handlers/generate/noises"
 	"codium-backend/internal/http_server/handlers/generate/skips"
 	"codium-backend/internal/http_server/handlers/get_status/submission_status"
 	"codium-backend/internal/http_server/handlers/get_status/task_status"
 	"codium-backend/internal/http_server/handlers/get_task"
 	"codium-backend/internal/http_server/handlers/solve/skips_check"
+	"codium-backend/internal/http_server/middleware"
 	"codium-backend/internal/storage/database"
 	"codium-backend/lib/logger/handlers/slogpretty"
 	"fmt"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/swaggo/http-swagger"
 	"log"
 	"log/slog"
@@ -41,6 +44,10 @@ const (
 
 // @host localhost:8082
 // @BasePath /api/v1
+
+// @securityDefinitions.apikey Bearer
+// @in header
+// @name Authorization
 func main() {
 	cfg := config.MustLoad()
 
@@ -58,31 +65,53 @@ func main() {
 	storage := database.DB
 	defer database.CloseDB()
 
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		logger.Error("JWT_SECRET environment variable is missing")
+		log.Fatal("JWT_SECRET is required")
+	}
+
 	router := chi.NewRouter()
 
-	router.Use(middleware.RequestID)
-	router.Use(middleware.Logger)
-	router.Use(middleware.Recoverer)
-	router.Use(middleware.URLFormat)
+	router.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"https://i-am-a-saw.github.io"},
+		AllowedMethods:   []string{"GET", "POST", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Content-Type", "Authorization", "X-Requested-With"},
+		AllowCredentials: false,
+		MaxAge:           300,
+	}))
 
-	// Serve the swagger.json file
+	router.Use(chiMiddleware.RequestID)
+	router.Use(chiMiddleware.Logger)
+	router.Use(chiMiddleware.Recoverer)
+	router.Use(chiMiddleware.URLFormat)
+
 	router.Get("/swagger/doc.json", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "./docs/swagger.json")
 	})
 
-	// Serve Swagger UI
 	router.Get("/swagger/*", httpSwagger.Handler(
-		httpSwagger.URL("/swagger/doc.json"), // Relative path to swagger.json
+		httpSwagger.URL("/swagger/doc.json"),
 	))
 
-	// Mount API routes under /api/v1
+	// Все маршруты под /api/v1
 	router.Route("/api/v1", func(r chi.Router) {
-		r.Post("/skips/generate", skips.New(logger, storage, storage, cfg))
-		r.Post("/noises/generate", noises.New(logger, storage, storage, cfg))
-		r.Post("/skips/solve", skips_check.New(logger, storage, storage, storage, cfg))
-		r.Get("/task/{alias}", get_task.New(logger, storage))
-		r.Get("/submission-status/{submission_id}", submission_status.New(logger, storage))
-		r.Get("/task-status/{alias}", task_status.GetTaskStatus(logger))
+		// Роуты без авторизации
+		r.Group(func(r chi.Router) {
+			r.Post("/auth/register", auth.Register(logger, storage, jwtSecret))
+			r.Post("/auth/login", auth.Login(logger, storage, jwtSecret))
+		})
+
+		// Роуты с авторизацией
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.AuthMiddleware(jwtSecret, logger))
+			r.Post("/skips/generate", skips.New(logger, storage, cfg))
+			r.Post("/noises/generate", noises.New(logger, storage, cfg))
+			r.Post("/skips/solve", skips_check.New(logger, storage))
+			r.Get("/task/{alias}", get_task.New(logger, storage))
+			r.Get("/submission-status/{submission_id}", submission_status.New(logger, storage))
+			r.Get("/task-status/{alias}", task_status.GetTaskStatus(logger))
+		})
 	})
 
 	logger.Info("starting server", slog.String("address", cfg.HTTPServer.Address))
