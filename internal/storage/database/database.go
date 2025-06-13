@@ -160,7 +160,7 @@ func (s *Storage) GetTaskStatus(alias string) (TaskStatus, error) {
 }
 
 // SaveSkipsCodeWithAlias сохраняет код задачи с алиасом и user_id
-func (s *Storage) SaveSkipsCodeWithAlias(skipsCode string, answers []string, programmingLanguageId, userID int64, alias string) (int64, int64, error) {
+func (s *Storage) SaveSkipsCodeWithAlias(skipsCode string, userOriginalCode string, answers []string, programmingLanguageId, userID int64, alias string) (int64, int64, error) {
 	tx, err := s.db.Begin(context.Background())
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to begin transaction: %v", err)
@@ -169,12 +169,50 @@ func (s *Storage) SaveSkipsCodeWithAlias(skipsCode string, answers []string, pro
 
 	var taskID int64
 	queryTask := `
-        INSERT INTO tasks (user_id, type, taskCode, answers, programming_language_id, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO tasks (user_id, type, taskCode, userOriginalCode, answers, programming_language_id, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING id
     `
 	createdAt := time.Now().UTC()
-	err = tx.QueryRow(context.Background(), queryTask, userID, "skips", skipsCode, answers, programmingLanguageId, createdAt).Scan(&taskID)
+	err = tx.QueryRow(context.Background(), queryTask, userID, "skips", skipsCode, userOriginalCode, answers, programmingLanguageId, createdAt).Scan(&taskID)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to insert task: %v", err)
+	}
+
+	var aliasID int64
+	queryAlias := `
+		INSERT INTO aliases (alias, task_id) 
+		VALUES ($1, $2)
+		RETURNING id
+	`
+	err = tx.QueryRow(context.Background(), queryAlias, alias, taskID).Scan(&aliasID)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to insert alias: %v", err)
+	}
+
+	if err := tx.Commit(context.Background()); err != nil {
+		return 0, 0, fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	return taskID, aliasID, nil
+}
+
+// SaveNoisesCodeWithAlias сохраняет код задачи с алиасом и user_id
+func (s *Storage) SaveNoisesCodeWithAlias(noisesCode string, userOriginalCode string, programmingLanguageId, userID int64, alias string) (int64, int64, error) {
+	tx, err := s.db.Begin(context.Background())
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback(context.Background())
+
+	var taskID int64
+	queryTask := `
+        INSERT INTO tasks (user_id, type, taskCode, userOriginalCode, answers, programming_language_id, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id
+    `
+	createdAt := time.Now().UTC()
+	err = tx.QueryRow(context.Background(), queryTask, userID, "noises", noisesCode, userOriginalCode, []string{userOriginalCode}, programmingLanguageId, createdAt).Scan(&taskID)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to insert task: %v", err)
 	}
