@@ -285,25 +285,6 @@ func (s *Storage) SaveNoisesCodeWithAlias(noisesCode string, userOriginalCode st
 	return taskID, aliasID, nil
 }
 
-// GetTaskUserIDByAlias возвращает user_id задачи по её алиасу
-func (s *Storage) GetTaskUserIDByAlias(alias string) (int64, error) {
-	query := `
-        SELECT tasks.user_id
-        FROM tasks
-        JOIN aliases ON tasks.id = aliases.task_id
-        WHERE aliases.alias = $1
-    `
-	var userID int64
-	err := s.db.QueryRow(context.Background(), query, alias).Scan(&userID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, fmt.Errorf("task not found")
-	}
-	if err != nil {
-		return 0, fmt.Errorf("failed to get task user_id: %v", err)
-	}
-	return userID, nil
-}
-
 func (s *Storage) GetProgrammingLanguageIDByName(name string) (int64, error) {
 	query := `
         SELECT id
