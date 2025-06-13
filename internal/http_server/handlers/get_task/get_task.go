@@ -1,7 +1,7 @@
 package get_task
 
 import (
-	"codular-backend/internal/http_server/middleware"
+	my_middleware "codular-backend/internal/http_server/middleware"
 	"codular-backend/internal/storage/database"
 	response_info "codular-backend/lib/api/response"
 	"codular-backend/lib/logger/sl"
@@ -67,7 +67,7 @@ func New(logger *slog.Logger, storage *database.Storage) http.HandlerFunc {
 		log.Info("got alias from request path", slog.String("alias", alias))
 
 		// Извлечение user_id из контекста
-		userID, ok := request.Context().Value(middleware.UserIDKey).(int64)
+		userID, ok := request.Context().Value(my_middleware.UserIDKey).(int64)
 		if !ok {
 			log.Error("failed to get user_id from context")
 			writer.WriteHeader(http.StatusUnauthorized)
