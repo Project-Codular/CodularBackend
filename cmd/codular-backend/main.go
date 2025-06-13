@@ -78,7 +78,7 @@ func main() {
 		AllowedOrigins:   []string{"https://i-am-a-saw.github.io"},
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization", "X-Requested-With"},
-		AllowCredentials: false,
+		AllowCredentials: true,
 		MaxAge:           300,
 	}))
 
@@ -102,6 +102,7 @@ func main() {
 			r.Post("/auth/register", auth.Register(logger, storage, jwtSecret))
 			r.Post("/auth/login", auth.Login(logger, storage, jwtSecret))
 			r.Post("/auth/refresh", auth.Refresh(logger, storage, jwtSecret))
+			r.Post("/auth/logout", auth.Logout(logger, storage))
 		})
 
 		// Роуты с авторизацией

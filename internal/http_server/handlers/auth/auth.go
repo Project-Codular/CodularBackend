@@ -24,14 +24,9 @@ type LoginRequest struct {
 	Password string `json:"password" validate:"required"`
 }
 
-type RefreshRequest struct {
-	RefreshToken string `json:"refresh_token" validate:"required"`
-}
-
 type AuthResponse struct {
 	ResponseInfo response_info.ResponseInfo `json:"responseInfo"`
 	AccessToken  string                     `json:"access_token"`
-	RefreshToken string                     `json:"refresh_token"`
 }
 
 type UserStorage interface {
@@ -39,6 +34,7 @@ type UserStorage interface {
 	GetUserByEmail(email string) (int64, string, error)
 	SaveToken(userID int64, token, tokenType string, expiresAt time.Time) error
 	ValidateToken(token, tokenType string) (int64, bool, error)
+	DeleteToken(token, tokenType string) error
 }
 
 // getErrorResponse возвращает ответ с ошибкой
@@ -46,7 +42,6 @@ func getErrorResponse(msg string) *AuthResponse {
 	return &AuthResponse{
 		ResponseInfo: response_info.Error(msg),
 		AccessToken:  "",
-		RefreshToken: "",
 	}
 }
 
@@ -55,22 +50,46 @@ func getValidationErrorResponse(validationErrors validator.ValidationErrors) *Au
 	return &AuthResponse{
 		ResponseInfo: response_info.ValidationError(validationErrors),
 		AccessToken:  "",
-		RefreshToken: "",
 	}
 }
 
-// getOKResponse возвращает успешный ответ с токенами
-func getOKResponse(accessToken, refreshToken string) *AuthResponse {
+// getOKResponse возвращает успешный ответ с токеном
+func getOKResponse(accessToken string) *AuthResponse {
 	return &AuthResponse{
 		ResponseInfo: response_info.OK(),
 		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
 	}
+}
+
+// setRefreshTokenCookie устанавливает refresh token в secure, HTTP-only cookie
+func setRefreshTokenCookie(w http.ResponseWriter, refreshToken string, expiresAt time.Time) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    refreshToken,
+		Expires:  expiresAt,
+		Path:     "/api/v1/auth",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+// clearRefreshTokenCookie удаляет refresh token cookie
+func clearRefreshTokenCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		Expires:  time.Now().Add(-time.Hour),
+		Path:     "/api/v1/auth",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	})
 }
 
 // Register создаёт нового пользователя
 // @Summary Register a new user
-// @Description Registers a new user with email and password, returning access and refresh tokens.
+// @Description Registers a new user with email and password, returning access token and setting refresh token in a secure cookie.
 // @Tags Auth
 // @Accept json
 // @Produce json
@@ -156,15 +175,16 @@ func Register(log *slog.Logger, storage UserStorage, jwtSecret string) http.Hand
 			return
 		}
 
+		setRefreshTokenCookie(w, refreshToken, time.Now().Add(time.Hour*24*30))
 		w.WriteHeader(http.StatusOK)
-		render.JSON(w, r, getOKResponse(accessToken, refreshToken))
+		render.JSON(w, r, getOKResponse(accessToken))
 		log.Info("user registered", slog.Int64("user_id", userID))
 	}
 }
 
 // Login аутентифицирует пользователя
 // @Summary Login user
-// @Description Authenticates a user with email and password, returning access and refresh tokens.
+// @Description Authenticates a user with email and password, returning access token and setting refresh token in a secure cookie.
 // @Tags Auth
 // @Accept json
 // @Produce json
@@ -243,21 +263,20 @@ func Login(log *slog.Logger, storage UserStorage, jwtSecret string) http.Handler
 			return
 		}
 
+		setRefreshTokenCookie(w, refreshToken, time.Now().Add(time.Hour*24*30))
 		w.WriteHeader(http.StatusOK)
-		render.JSON(w, r, getOKResponse(accessToken, refreshToken))
+		render.JSON(w, r, getOKResponse(accessToken))
 		log.Info("user logged in", slog.Int64("user_id", userID))
 	}
 }
 
-// Refresh обновляет access-токен по refresh-токену
+// Refresh обновляет access-токен по refresh-токену из cookie
 // @Summary Refresh access token
-// @Description Refreshes the access token using a valid refresh token.
+// @Description Refreshes the access token using a valid refresh token provided in a secure cookie.
 // @Tags Auth
-// @Accept json
 // @Produce json
-// @Param request body RefreshRequest true "Refresh token"
 // @Success 200 {object} AuthResponse "Access token refreshed successfully"
-// @Failure 400 {object} AuthResponse "Invalid request or empty body"
+// @Failure 400 {object} AuthResponse "Missing refresh token cookie"
 // @Failure 401 {object} AuthResponse "Invalid or expired refresh token"
 // @Failure 500 {object} AuthResponse "Internal server error"
 // @Router /auth/refresh [post]
@@ -270,22 +289,15 @@ func Refresh(log *slog.Logger, storage *database.Storage, jwtSecret string) http
 			slog.String("request_id", middleware.GetReqID(r.Context())),
 		)
 
-		var req RefreshRequest
-		if err := render.DecodeJSON(r.Body, &req); err != nil {
-			log.Error("failed to decode request body", sl.Err(err))
+		refreshCookie, err := r.Cookie("refresh_token")
+		if err != nil {
+			log.Error("missing refresh token cookie", sl.Err(err))
 			w.WriteHeader(http.StatusBadRequest)
-			render.JSON(w, r, getErrorResponse("invalid request body"))
+			render.JSON(w, r, getErrorResponse("missing refresh token cookie"))
 			return
 		}
 
-		if err := validator.New().Struct(req); err != nil {
-			log.Error("invalid request", sl.Err(err))
-			w.WriteHeader(http.StatusBadRequest)
-			render.JSON(w, r, getValidationErrorResponse(err.(validator.ValidationErrors)))
-			return
-		}
-
-		userID, valid, err := storage.ValidateToken(req.RefreshToken, "refresh")
+		userID, valid, err := storage.ValidateToken(refreshCookie.Value, "refresh")
 		if err != nil {
 			log.Error("failed to validate refresh token", sl.Err(err))
 			w.WriteHeader(http.StatusUnauthorized)
@@ -333,14 +345,57 @@ func Refresh(log *slog.Logger, storage *database.Storage, jwtSecret string) http
 		}
 
 		// Удаление старого refresh-токена
-		if err := storage.DeleteToken(req.RefreshToken, "refresh"); err != nil {
+		if err := storage.DeleteToken(refreshCookie.Value, "refresh"); err != nil {
 			log.Error("failed to delete old refresh token", sl.Err(err))
 			// Не возвращаем ошибку клиенту, так как новые токены уже выданы
 		}
 
+		setRefreshTokenCookie(w, newRefreshToken, time.Now().Add(time.Hour*24*30))
 		w.WriteHeader(http.StatusOK)
-		render.JSON(w, r, getOKResponse(newAccessToken, newRefreshToken))
+		render.JSON(w, r, getOKResponse(newAccessToken))
 		log.Info("access token refreshed", slog.Int64("user_id", userID))
+	}
+}
+
+// Logout завершает сессию пользователя
+// @Summary Logout user
+// @Description Invalidates the refresh token by clearing the secure cookie and removing it from the database.
+// @Tags Auth
+// @Produce json
+// @Success 200 {object} AuthResponse "User logged out successfully"
+// @Failure 400 {object} AuthResponse "Missing refresh token cookie"
+// @Failure 500 {object} AuthResponse "Internal server error"
+// @Router /auth/logout [post]
+func Logout(log *slog.Logger, storage *database.Storage) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		const functionPath = "internal.http_server.handlers.auth.Logout"
+
+		log = log.With(
+			slog.String("function_path", functionPath),
+			slog.String("request_id", middleware.GetReqID(r.Context())),
+		)
+
+		refreshCookie, err := r.Cookie("refresh_token")
+		if err != nil {
+			log.Error("missing refresh token cookie", sl.Err(err))
+			w.WriteHeader(http.StatusBadRequest)
+			render.JSON(w, r, getErrorResponse("missing refresh token cookie"))
+			return
+		}
+
+		// Удаление refresh-токена из базы
+		if err := storage.DeleteToken(refreshCookie.Value, "refresh"); err != nil {
+			log.Error("failed to delete refresh token", sl.Err(err))
+			w.WriteHeader(http.StatusInternalServerError)
+			render.JSON(w, r, getErrorResponse("internal server error"))
+			return
+		}
+
+		// Очистка cookie
+		clearRefreshTokenCookie(w)
+		w.WriteHeader(http.StatusOK)
+		render.JSON(w, r, getOKResponse(""))
+		log.Info("user logged out")
 	}
 }
 
