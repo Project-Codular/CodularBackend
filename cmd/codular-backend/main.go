@@ -4,6 +4,7 @@ import (
 	_ "codular-backend/docs"
 	"codular-backend/internal/config"
 	"codular-backend/internal/http_server/handlers/auth"
+	"codular-backend/internal/http_server/handlers/edit_task"
 	"codular-backend/internal/http_server/handlers/generate/noises"
 	"codular-backend/internal/http_server/handlers/generate/skips"
 	"codular-backend/internal/http_server/handlers/get_status/submission_status"
@@ -114,6 +115,7 @@ func main() {
 			r.Post("/skips/solve", skips_check.New(logger, storage))
 			r.Get("/task/{alias}", get_task.New(logger, storage))
 			r.Patch("/task/{alias}/regenerate", regenerate.New(logger, storage))
+			r.Patch("/task/{alias}/set-access", edit_task.ChangeAccess(logger, storage))
 			r.Get("/submission-status/{submission_id}", submission_status.New(logger, storage))
 			r.Get("/task-status/{alias}", task_status.GetTaskStatus(logger))
 		})
