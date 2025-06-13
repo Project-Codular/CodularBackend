@@ -33,15 +33,15 @@ func getErrorResponse(msg string) *ServerResponse {
 	}
 }
 
-// GetSubmissionStatus returns the status of a submission by its ID.
+// GetSubmissionStatus retrieves the status of a submission by its ID.
 // @Summary Get submission status
-// @Description Returns the current status of a submission by its ID, including any hints if available.
+// @Description Retrieves the current status of a submission by its ID, including score and hints if available. The score indicates the correctness of the submission (e.g., 100 for success, <100 for failure).
 // @Tags Submissions
 // @Produce json
 // @Param submission_id path int true "Submission ID"
 // @Success 200 {object} ServerResponse "Submission status retrieved successfully"
-// @Success 200 {object} ServerResponse "Example response for success" Example({"responseInfo":{"status":"OK"},"IsCorrect":"Success","hints":[]})
-// @Success 200 {object} ServerResponse "Example response for failure with hints" Example({"responseInfo":{"status":"OK"},"IsCorrect":"Failed","hints":["1'th skip: Hint message 1","3'th skip: Hint message 2"]})
+// @Success 200 {object} ServerResponse "Example response for success" Example({"responseInfo":{"status":"OK"},"isCorrect":"Success","score":100,"hints":[]})
+// @Success 200 {object} ServerResponse "Example response for noises failure with hints" Example({"responseInfo":{"status":"OK"},"isCorrect":"Failed","score":50,"hints":["Check string concatenation order","Avoid extra variables"]})
 // @Failure 400 {object} ServerResponse "Invalid submission ID format"
 // @Failure 404 {object} ServerResponse "Submission not found"
 // @Failure 500 {object} ServerResponse "Internal server error"

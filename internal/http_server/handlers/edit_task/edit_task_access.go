@@ -3,7 +3,7 @@ package edit_task
 import (
 	myMiddleware "codular-backend/internal/http_server/middleware"
 	"codular-backend/internal/storage/database"
-	responseInfo "codular-backend/lib/api/response"
+	response_info "codular-backend/lib/api/response"
 	"codular-backend/lib/logger/sl"
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
@@ -18,27 +18,27 @@ type SetPublicRequest struct {
 }
 
 type SetPublicResponse struct {
-	ResponseInfo responseInfo.ResponseInfo `json:"responseInfo"`
-	TaskAlias    string                    `json:"taskAlias"`
+	ResponseInfo response_info.ResponseInfo `json:"response_info"`
+	TaskAlias    string                     `json:"taskAlias"`
 }
 
 func getErrorResponse(msg string) *SetPublicResponse {
 	return &SetPublicResponse{
-		ResponseInfo: responseInfo.Error(msg),
+		ResponseInfo: response_info.Error(msg),
 		TaskAlias:    "",
 	}
 }
 
 func getValidationErrorResponse(validationErrors validator.ValidationErrors) *SetPublicResponse {
 	return &SetPublicResponse{
-		ResponseInfo: responseInfo.ValidationError(validationErrors),
+		ResponseInfo: response_info.ValidationError(validationErrors),
 		TaskAlias:    "",
 	}
 }
 
 func getOKResponse(taskAlias string) *SetPublicResponse {
 	return &SetPublicResponse{
-		ResponseInfo: responseInfo.OK(),
+		ResponseInfo: response_info.OK(),
 		TaskAlias:    taskAlias,
 	}
 }
@@ -52,7 +52,7 @@ func getOKResponse(taskAlias string) *SetPublicResponse {
 // @Param alias path string true "Task alias"
 // @Param request body SetPublicRequest true "Public status"
 // @Success 200 {object} SetPublicResponse "Successfully updated task public status"
-// @Success 200 {object} SetPublicResponse "Example response" Example({"responseInfo":{"status":"OK"},"taskAlias":"abc123"})
+// @Success 200 {object} SetPublicResponse "Example response" Example({"response_info":{"status":"OK"},"taskAlias":"abc123"})
 // @Failure 400 {object} SetPublicResponse "Invalid request or task alias is empty"
 // @Failure 401 {object} SetPublicResponse "Unauthorized"
 // @Failure 403 {object} SetPublicResponse "Forbidden: user does not have edit permissions"

@@ -55,19 +55,19 @@ func getOKResponse(submissionID int64) *ServerResponse {
 	}
 }
 
-// New handles the submission of answers for a noises task.
-// @Summary Submit answers for a noises task
-// @Description Receives user answers for a given task alias, saves the submission, and asynchronously processes it.
+// New handles the submission of user answers for a noises task.
+// @Summary Submit answer for a noises task
+// @Description Submits a user's answer for a noises task identified by its alias, saves the submission, and processes it asynchronously. Returns a submission ID for status tracking.
 // @Tags Noises
 // @Accept json
 // @Produce json
-// @Param request body ClientRequest true "Task alias and user's answers"
-// @Success 200 {object} ServerResponse "Successfully initiated submission processing"
-// @Success 200 {object} ServerResponse "Example response for successful submission" Example({"responseInfo":{"status":"OK"},"submissionId":123})
+// @Param request body ClientRequest true "Task alias and user answer"
+// @Success 200 {object} ServerResponse "Submission processing initiated successfully"
+// @Success 200 {object} ServerResponse "Example response" Example({"responseInfo":{"status":"OK"},"submissionId":123})
 // @Failure 400 {object} ServerResponse "Invalid request body or validation error"
 // @Failure 404 {object} ServerResponse "Task not found"
 // @Failure 500 {object} ServerResponse "Internal server error"
-// @Router /skips/solve [post]
+// @Router /noises/solve [post]
 func New(log *slog.Logger, storage *database.Storage) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		const functionPath = "internal.http_server.handlers.solve.skips_check.New"

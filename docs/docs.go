@@ -244,6 +244,58 @@ const docTemplate = `{
                 }
             }
         },
+        "/noises/solve": {
+            "post": {
+                "description": "Submits a user's answer for a noises task identified by its alias, saves the submission, and processes it asynchronously. Returns a submission ID for status tracking.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Noises"
+                ],
+                "summary": "Submit answer for a noises task",
+                "parameters": [
+                    {
+                        "description": "Task alias and user answer",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/noises_check.ClientRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Example response\" Example({\"responseInfo\":{\"status\":\"OK\"},\"submissionId\":123})",
+                        "schema": {
+                            "$ref": "#/definitions/noises_check.ServerResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body or validation error",
+                        "schema": {
+                            "$ref": "#/definitions/noises_check.ServerResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Task not found",
+                        "schema": {
+                            "$ref": "#/definitions/noises_check.ServerResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/noises_check.ServerResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/skips/generate": {
             "post": {
                 "description": "Processes the provided source code with a specified number of skips, generates a unique alias, and saves initial status to Redis. Returns the task alias for status checking.",
@@ -344,7 +396,7 @@ const docTemplate = `{
         },
         "/submission-status/{submission_id}": {
             "get": {
-                "description": "Returns the current status of a submission by its ID, including any hints if available.",
+                "description": "Retrieves the current status of a submission by its ID, including score and hints if available. The score indicates the correctness of the submission (e.g., 100 for success, \u003c100 for failure).",
                 "produces": [
                     "application/json"
                 ],
@@ -363,7 +415,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Example response for failure with hints\" Example({\"responseInfo\":{\"status\":\"OK\"},\"IsCorrect\":\"Failed\",\"hints\":[\"1'th skip: Hint message 1\",\"3'th skip: Hint message 2\"]})",
+                        "description": "Example response for noises failure with hints\" Example({\"responseInfo\":{\"status\":\"OK\"},\"isCorrect\":\"Failed\",\"score\":50,\"hints\":[\"Check string concatenation order\",\"Avoid extra variables\"]})",
                         "schema": {
                             "$ref": "#/definitions/submission_status.ServerResponse"
                         }
@@ -431,6 +483,44 @@ const docTemplate = `{
                         "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/task_status.StatusResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/task/random": {
+            "get": {
+                "description": "Redirects to a random public task with public = true.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Task"
+                ],
+                "summary": "Get random public task",
+                "responses": {
+                    "302": {
+                        "description": "Redirect to /api/v1/task/{alias}",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "No public tasks found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     }
                 }
@@ -559,6 +649,77 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/task/{alias}/set-public": {
+            "patch": {
+                "description": "Updates the public status of a task identified by its alias. Requires user authorization and edit permissions.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Task"
+                ],
+                "summary": "Set task public status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task alias",
+                        "name": "alias",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Public status",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/edit_task.SetPublicRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Example response\" Example({\"response_info\":{\"status\":\"OK\"},\"taskAlias\":\"abc123\"})",
+                        "schema": {
+                            "$ref": "#/definitions/edit_task.SetPublicResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or task alias is empty",
+                        "schema": {
+                            "$ref": "#/definitions/edit_task.SetPublicResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/edit_task.SetPublicResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden: user does not have edit permissions",
+                        "schema": {
+                            "$ref": "#/definitions/edit_task.SetPublicResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Task not found",
+                        "schema": {
+                            "$ref": "#/definitions/edit_task.SetPublicResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/edit_task.SetPublicResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -604,6 +765,28 @@ const docTemplate = `{
                 }
             }
         },
+        "edit_task.SetPublicRequest": {
+            "type": "object",
+            "required": [
+                "public"
+            ],
+            "properties": {
+                "public": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "edit_task.SetPublicResponse": {
+            "type": "object",
+            "properties": {
+                "response_info": {
+                    "$ref": "#/definitions/response_info.ResponseInfo"
+                },
+                "taskAlias": {
+                    "type": "string"
+                }
+            }
+        },
         "get_task.Response": {
             "type": "object",
             "properties": {
@@ -628,7 +811,7 @@ const docTemplate = `{
             "properties": {
                 "noiseLevel": {
                     "type": "integer",
-                    "maximum": 10,
+                    "maximum": 100,
                     "minimum": 0
                 },
                 "programmingLanguage": {
@@ -647,6 +830,32 @@ const docTemplate = `{
                 },
                 "taskAlias": {
                     "type": "string"
+                }
+            }
+        },
+        "noises_check.ClientRequest": {
+            "type": "object",
+            "required": [
+                "answer",
+                "taskAlias"
+            ],
+            "properties": {
+                "answer": {
+                    "type": "string"
+                },
+                "taskAlias": {
+                    "type": "string"
+                }
+            }
+        },
+        "noises_check.ServerResponse": {
+            "type": "object",
+            "properties": {
+                "responseInfo": {
+                    "$ref": "#/definitions/response_info.ResponseInfo"
+                },
+                "submissionId": {
+                    "type": "integer"
                 }
             }
         },
@@ -749,17 +958,20 @@ const docTemplate = `{
         "submission_status.ServerResponse": {
             "type": "object",
             "properties": {
-                "IsCorrect": {
-                    "type": "string"
-                },
                 "hints": {
                     "type": "array",
                     "items": {
                         "type": "string"
                     }
                 },
+                "isCorrect": {
+                    "type": "string"
+                },
                 "responseInfo": {
                     "$ref": "#/definitions/response_info.ResponseInfo"
+                },
+                "score": {
+                    "type": "integer"
                 }
             }
         },
