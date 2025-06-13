@@ -418,9 +418,9 @@ const docTemplate = `{
                 }
             }
         },
-        "/tasks/{alias}": {
+        "/task/{alias}": {
             "get": {
-                "description": "Retrieves the processed code associated with the given alias from the database.",
+                "description": "Retrieves the processed code associated with the given alias from the database, including whether the user can edit the task.",
                 "produces": [
                     "application/json"
                 ],
@@ -439,7 +439,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Example response\" Example({\"responseInfo\":{\"status\":\"OK\"},\"codeToSolve\":\"processed code\"})",
+                        "description": "Example response\" Example({\"responseInfo\":{\"status\":\"OK\"},\"codeToSolve\":\"processed code\",\"canEdit\":true})",
                         "schema": {
                             "$ref": "#/definitions/get_task.Response"
                         }
@@ -450,10 +450,93 @@ const docTemplate = `{
                             "$ref": "#/definitions/get_task.Response"
                         }
                     },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/get_task.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Task not found",
+                        "schema": {
+                            "$ref": "#/definitions/get_task.Response"
+                        }
+                    },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/get_task.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/task/{alias}/regenerate": {
+            "patch": {
+                "description": "Regenerates the task associated with the given alias, updating its code and answers based on the task type (skips or noises). Requires user authorization and edit permissions.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Tasks"
+                ],
+                "summary": "Regenerate task by alias",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Task alias",
+                        "name": "alias",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Optional skips number or noise level",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/regenerate.Request"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Example response\" Example({\"responseInfo\":{\"status\":\"OK\"},\"taskAlias\":\"abc123\"})",
+                        "schema": {
+                            "$ref": "#/definitions/regenerate.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or task alias is empty",
+                        "schema": {
+                            "$ref": "#/definitions/regenerate.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/regenerate.Response"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden: user does not have edit permissions",
+                        "schema": {
+                            "$ref": "#/definitions/regenerate.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "Task not found",
+                        "schema": {
+                            "$ref": "#/definitions/regenerate.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/regenerate.Response"
                         }
                     }
                 }
@@ -520,6 +603,9 @@ const docTemplate = `{
         "get_task.Response": {
             "type": "object",
             "properties": {
+                "canEdit": {
+                    "type": "boolean"
+                },
                 "codeToSolve": {
                     "type": "string"
                 },
@@ -550,6 +636,31 @@ const docTemplate = `{
             }
         },
         "noises.Response": {
+            "type": "object",
+            "properties": {
+                "responseInfo": {
+                    "$ref": "#/definitions/response_info.ResponseInfo"
+                },
+                "taskAlias": {
+                    "type": "string"
+                }
+            }
+        },
+        "regenerate.Request": {
+            "type": "object",
+            "properties": {
+                "noiseLevel": {
+                    "type": "integer",
+                    "maximum": 10,
+                    "minimum": 0
+                },
+                "skipsNumber": {
+                    "type": "integer",
+                    "minimum": 0
+                }
+            }
+        },
+        "regenerate.Response": {
             "type": "object",
             "properties": {
                 "responseInfo": {

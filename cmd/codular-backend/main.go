@@ -9,6 +9,7 @@ import (
 	"codular-backend/internal/http_server/handlers/get_status/submission_status"
 	"codular-backend/internal/http_server/handlers/get_status/task_status"
 	"codular-backend/internal/http_server/handlers/get_task"
+	"codular-backend/internal/http_server/handlers/regenerate"
 	"codular-backend/internal/http_server/handlers/solve/skips_check"
 	"codular-backend/internal/http_server/middleware"
 	"codular-backend/internal/storage/database"
@@ -75,7 +76,7 @@ func main() {
 
 	router.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"https://i-am-a-saw.github.io"},
-		AllowedMethods:   []string{"GET", "POST", "DELETE", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization", "X-Requested-With"},
 		AllowCredentials: false,
 		MaxAge:           300,
@@ -110,6 +111,7 @@ func main() {
 			r.Post("/noises/generate", noises.New(logger, storage, cfg))
 			r.Post("/skips/solve", skips_check.New(logger, storage))
 			r.Get("/task/{alias}", get_task.New(logger, storage))
+			r.Patch("/task/{alias}/regenerate", regenerate.New(logger, storage))
 			r.Get("/submission-status/{submission_id}", submission_status.New(logger, storage))
 			r.Get("/task-status/{alias}", task_status.GetTaskStatus(logger))
 		})

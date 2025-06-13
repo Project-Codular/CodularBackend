@@ -39,6 +39,8 @@ definitions:
     type: object
   get_task.Response:
     properties:
+      canEdit:
+        type: boolean
       codeToSolve:
         type: string
       responseInfo:
@@ -60,6 +62,23 @@ definitions:
     - sourceCode
     type: object
   noises.Response:
+    properties:
+      responseInfo:
+        $ref: '#/definitions/response_info.ResponseInfo'
+      taskAlias:
+        type: string
+    type: object
+  regenerate.Request:
+    properties:
+      noiseLevel:
+        maximum: 10
+        minimum: 0
+        type: integer
+      skipsNumber:
+        minimum: 0
+        type: integer
+    type: object
+  regenerate.Response:
     properties:
       responseInfo:
         $ref: '#/definitions/response_info.ResponseInfo'
@@ -417,10 +436,10 @@ paths:
       summary: Get task status
       tags:
       - Skips
-  /tasks/{alias}:
+  /task/{alias}:
     get:
       description: Retrieves the processed code associated with the given alias from
-        the database.
+        the database, including whether the user can edit the task.
       parameters:
       - description: Task alias
         in: path
@@ -432,11 +451,19 @@ paths:
       responses:
         "200":
           description: Example response" Example({"responseInfo":{"status":"OK"},"codeToSolve":"processed
-            code"})
+            code","canEdit":true})
           schema:
             $ref: '#/definitions/get_task.Response'
         "400":
           description: Task alias is empty
+          schema:
+            $ref: '#/definitions/get_task.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/get_task.Response'
+        "404":
+          description: Task not found
           schema:
             $ref: '#/definitions/get_task.Response'
         "500":
@@ -444,6 +471,55 @@ paths:
           schema:
             $ref: '#/definitions/get_task.Response'
       summary: Get task by alias
+      tags:
+      - Tasks
+  /task/{alias}/regenerate:
+    patch:
+      consumes:
+      - application/json
+      description: Regenerates the task associated with the given alias, updating
+        its code and answers based on the task type (skips or noises). Requires user
+        authorization and edit permissions.
+      parameters:
+      - description: Task alias
+        in: path
+        name: alias
+        required: true
+        type: string
+      - description: Optional skips number or noise level
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/regenerate.Request'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Example response" Example({"responseInfo":{"status":"OK"},"taskAlias":"abc123"})
+          schema:
+            $ref: '#/definitions/regenerate.Response'
+        "400":
+          description: Invalid request or task alias is empty
+          schema:
+            $ref: '#/definitions/regenerate.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/regenerate.Response'
+        "403":
+          description: 'Forbidden: user does not have edit permissions'
+          schema:
+            $ref: '#/definitions/regenerate.Response'
+        "404":
+          description: Task not found
+          schema:
+            $ref: '#/definitions/regenerate.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/regenerate.Response'
+      summary: Regenerate task by alias
       tags:
       - Tasks
 securityDefinitions:

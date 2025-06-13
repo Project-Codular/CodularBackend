@@ -163,7 +163,7 @@ func New(log *slog.Logger, storage *database.Storage, cfg *config.Config) http.H
 func processTaskAsync(log *slog.Logger, alias, code string, skipsNumber int, programmingLanguageId, userID int64, storage *database.Storage) {
 	log = log.With(slog.String("task_alias", alias), slog.Int64("user_id", userID))
 
-	processedCode, answers, err := processCode(code, skipsNumber, log)
+	processedCode, answers, err := ProcessCode(code, skipsNumber, log)
 	if err != nil {
 		// Обновление статуса на "Error" в случае ошибки
 		errorStatus := database.TaskStatus{Status: "Error", Error: err.Error()}
@@ -174,7 +174,7 @@ func processTaskAsync(log *slog.Logger, alias, code string, skipsNumber int, pro
 	}
 
 	// Сохранение в PostgreSQL
-	_, _, err = storage.SaveSkipsCodeWithAlias(processedCode, answers, programmingLanguageId, userID, alias)
+	_, _, err = storage.SaveSkipsCodeWithAlias(processedCode, code, answers, programmingLanguageId, userID, alias)
 	if err != nil {
 		// Обновление статуса на "Error" в случае ошибки сохранения
 		errorStatus := database.TaskStatus{Status: "Error", Error: fmt.Sprintf("failed to save task: %v", err)}
@@ -191,7 +191,7 @@ func processTaskAsync(log *slog.Logger, alias, code string, skipsNumber int, pro
 	}
 }
 
-func processCode(code string, number int, logger *slog.Logger) (string, []string, error) {
+func ProcessCode(code string, number int, logger *slog.Logger) (string, []string, error) {
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	model := os.Getenv("MODEL")
 	temperature := 0.7

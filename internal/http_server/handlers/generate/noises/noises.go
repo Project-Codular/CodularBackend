@@ -161,7 +161,7 @@ func New(log *slog.Logger, storage *database.Storage, cfg *config.Config) http.H
 func processTaskAsync(log *slog.Logger, alias, code string, noiseLevel int, programmingLanguageId, userID int64, storage *database.Storage) {
 	log = log.With(slog.String("task_alias", alias), slog.Int64("user_id", userID))
 
-	processedCode, err := processCode(code, noiseLevel, log)
+	processedCode, err := ProcessCode(code, noiseLevel, log)
 	if err != nil {
 		// Обновление статуса на "Error" в случае ошибки
 		errorStatus := database.TaskStatus{Status: "Error", Error: err.Error()}
@@ -190,7 +190,7 @@ func processTaskAsync(log *slog.Logger, alias, code string, noiseLevel int, prog
 }
 
 // Returns noised code
-func processCode(code string, noiseLevel int, logger *slog.Logger) (string, error) {
+func ProcessCode(code string, noiseLevel int, logger *slog.Logger) (string, error) {
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	model := os.Getenv("MODEL")
 	temperature := 0.7

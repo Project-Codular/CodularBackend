@@ -41,6 +41,14 @@ type Token struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
+type TaskDetails struct {
+	TaskID                int64  `json:"task_id"`
+	UserID                int64  `json:"user_id"`
+	Type                  string `json:"type"`
+	UserOriginalCode      string `json:"user_original_code"`
+	ProgrammingLanguageID int64  `json:"programming_language_id"`
+}
+
 // CreateUser создаёт нового пользователя
 func (s *Storage) CreateUser(email, passwordHash string) (int64, error) {
 	query := `
@@ -124,6 +132,48 @@ func (s *Storage) DeleteToken(token, tokenType string) error {
 	_, err := s.db.Exec(context.Background(), query, token, tokenType)
 	if err != nil {
 		return fmt.Errorf("failed to delete token: %v", err)
+	}
+	return nil
+}
+
+// GetTaskDetailsByAlias возвращает детали задачи по алиасу
+func (s *Storage) GetTaskDetailsByAlias(alias string) (TaskDetails, error) {
+	query := `
+        SELECT tasks.id, tasks.user_id, tasks.type, tasks.userOriginalCode, tasks.programming_language_id
+        FROM tasks
+        JOIN aliases ON tasks.id = aliases.task_id
+        WHERE aliases.alias = $1
+    `
+	var details TaskDetails
+	err := s.db.QueryRow(context.Background(), query, alias).Scan(
+		&details.TaskID,
+		&details.UserID,
+		&details.Type,
+		&details.UserOriginalCode,
+		&details.ProgrammingLanguageID,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return TaskDetails{}, fmt.Errorf("task not found")
+	}
+	if err != nil {
+		return TaskDetails{}, fmt.Errorf("failed to get task details: %v", err)
+	}
+	return details, nil
+}
+
+// UpdateTaskCodeAndAnswers обновляет код и ответы задачи
+func (s *Storage) UpdateTaskCodeAndAnswers(taskID int64, taskCode string, answers []string) error {
+	query := `
+        UPDATE tasks
+        SET taskCode = $1, answers = $2, created_at = $3
+        WHERE id = $4
+    `
+	result, err := s.db.Exec(context.Background(), query, taskCode, answers, time.Now().UTC(), taskID)
+	if err != nil {
+		return fmt.Errorf("failed to update task: %v", err)
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("task with ID %d not found", taskID)
 	}
 	return nil
 }
