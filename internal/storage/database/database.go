@@ -46,6 +46,7 @@ type TaskDetails struct {
 	UserID                int64  `json:"user_id"`
 	Type                  string `json:"type"`
 	UserOriginalCode      string `json:"user_original_code"`
+	Description           string `json:"description"`
 	ProgrammingLanguageID int64  `json:"programming_language_id"`
 }
 
@@ -139,7 +140,7 @@ func (s *Storage) DeleteToken(token, tokenType string) error {
 // GetTaskDetailsByAlias возвращает детали задачи по алиасу
 func (s *Storage) GetTaskDetailsByAlias(alias string) (TaskDetails, error) {
 	query := `
-        SELECT tasks.id, tasks.user_id, tasks.type, tasks.userOriginalCode, tasks.programming_language_id
+        SELECT tasks.id, tasks.user_id, tasks.type, tasks.userOriginalCode, tasks.programming_language_id, tasks.description
         FROM tasks
         JOIN aliases ON tasks.id = aliases.task_id
         WHERE aliases.alias = $1
@@ -151,6 +152,7 @@ func (s *Storage) GetTaskDetailsByAlias(alias string) (TaskDetails, error) {
 		&details.Type,
 		&details.UserOriginalCode,
 		&details.ProgrammingLanguageID,
+		&details.Description,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return TaskDetails{}, fmt.Errorf("task not found")
@@ -162,13 +164,13 @@ func (s *Storage) GetTaskDetailsByAlias(alias string) (TaskDetails, error) {
 }
 
 // UpdateTaskCodeAndAnswers обновляет код и ответы задачи
-func (s *Storage) UpdateTaskCodeAndAnswers(taskID int64, taskCode string, answers []string) error {
+func (s *Storage) UpdateTaskCodeAndAnswers(taskID int64, taskCode string, answers []string, description string) error {
 	query := `
         UPDATE tasks
-        SET taskCode = $1, answers = $2, created_at = $3
+        SET taskCode = $1, answers = $2, created_at = $3, description = $4
         WHERE id = $4
     `
-	result, err := s.db.Exec(context.Background(), query, taskCode, answers, time.Now().UTC(), taskID)
+	result, err := s.db.Exec(context.Background(), query, taskCode, answers, time.Now().UTC(), description, taskID)
 	if err != nil {
 		return fmt.Errorf("failed to update task: %v", err)
 	}
@@ -248,7 +250,7 @@ func (s *Storage) GetRandomPublicTaskAlias() (string, error) {
 }
 
 // SaveSkipsCodeWithAlias сохраняет код задачи с алиасом и user_id
-func (s *Storage) SaveSkipsCodeWithAlias(skipsCode string, userOriginalCode string, answers []string, programmingLanguageId, userID int64, alias string) (int64, int64, error) {
+func (s *Storage) SaveSkipsCodeWithAlias(skipsCode string, userOriginalCode string, answers []string, programmingLanguageId, userID int64, alias string, description string) (int64, int64, error) {
 	tx, err := s.db.Begin(context.Background())
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to begin transaction: %v", err)
@@ -257,12 +259,12 @@ func (s *Storage) SaveSkipsCodeWithAlias(skipsCode string, userOriginalCode stri
 
 	var taskID int64
 	queryTask := `
-        INSERT INTO tasks (user_id, type, taskCode, userOriginalCode, answers, programming_language_id, created_at, public)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO tasks (user_id, type, taskCode, userOriginalCode, description, answers, programming_language_id, created_at, public)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING id
     `
 	createdAt := time.Now().UTC()
-	err = tx.QueryRow(context.Background(), queryTask, userID, "skips", skipsCode, userOriginalCode, answers, programmingLanguageId, createdAt, false).Scan(&taskID)
+	err = tx.QueryRow(context.Background(), queryTask, userID, "skips", skipsCode, userOriginalCode, description, answers, programmingLanguageId, createdAt, false).Scan(&taskID)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to insert task: %v", err)
 	}
@@ -286,7 +288,7 @@ func (s *Storage) SaveSkipsCodeWithAlias(skipsCode string, userOriginalCode stri
 }
 
 // SaveNoisesCodeWithAlias сохраняет код задачи с алиасом и user_id
-func (s *Storage) SaveNoisesCodeWithAlias(noisesCode string, userOriginalCode string, programmingLanguageId, userID int64, alias string) (int64, int64, error) {
+func (s *Storage) SaveNoisesCodeWithAlias(noisesCode string, userOriginalCode string, programmingLanguageId, userID int64, alias string, description string) (int64, int64, error) {
 	tx, err := s.db.Begin(context.Background())
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to begin transaction: %v", err)
@@ -295,12 +297,12 @@ func (s *Storage) SaveNoisesCodeWithAlias(noisesCode string, userOriginalCode st
 
 	var taskID int64
 	queryTask := `
-        INSERT INTO tasks (user_id, type, taskCode, userOriginalCode, answers, programming_language_id, created_at, public)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO tasks (user_id, type, taskCode, userOriginalCode, description, answers, programming_language_id, created_at, public)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING id
     `
 	createdAt := time.Now().UTC()
-	err = tx.QueryRow(context.Background(), queryTask, userID, "noises", noisesCode, userOriginalCode, []string{userOriginalCode}, programmingLanguageId, createdAt, false).Scan(&taskID)
+	err = tx.QueryRow(context.Background(), queryTask, userID, "noises", noisesCode, userOriginalCode, description, []string{userOriginalCode}, programmingLanguageId, createdAt, false).Scan(&taskID)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to insert task: %v", err)
 	}
@@ -386,6 +388,24 @@ func (s *Storage) GetSavedTaskCode(alias string) (string, error) {
 		return "", fmt.Errorf("failed to get skips code: %v", err)
 	}
 	return savedCode, nil
+}
+
+func (s *Storage) GetSavedTaskDescription(alias string) (string, error) {
+	query := `
+		SELECT tasks.description
+		FROM aliases
+		JOIN tasks ON aliases.task_id = tasks.id
+		WHERE aliases.alias = $1
+	`
+	var description string
+	err := s.db.QueryRow(context.Background(), query, alias).Scan(&description)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", storage.ErrCodeNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to get skips code: %v", err)
+	}
+	return description, nil
 }
 
 func (s *Storage) GetCodeAnswers(codeAlias string) ([]string, error) {

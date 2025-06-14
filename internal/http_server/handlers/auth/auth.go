@@ -69,7 +69,7 @@ func setRefreshTokenCookie(w http.ResponseWriter, refreshToken string, expiresAt
 		Expires:  expiresAt,
 		Path:     "/api/v1/auth",
 		HttpOnly: true,
-		Secure:   false, // todo change to true
+		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
 	})
 }
@@ -82,7 +82,7 @@ func clearRefreshTokenCookie(w http.ResponseWriter) {
 		Expires:  time.Now().Add(-time.Hour),
 		Path:     "/api/v1/auth",
 		HttpOnly: true,
-		Secure:   false, // todo change to true
+		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
 	})
 }

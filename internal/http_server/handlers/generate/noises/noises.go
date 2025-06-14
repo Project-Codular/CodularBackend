@@ -34,7 +34,8 @@ type Response struct {
 }
 
 type LLMResponse struct {
-	NoisedCode string `json:"noiseCode"`
+	NoisedCode  string `json:"noiseCode"`
+	Description string `json:"description"`
 }
 
 func getErrorResponse(msg string) *Response {
@@ -161,7 +162,7 @@ func New(log *slog.Logger, storage *database.Storage, cfg *config.Config) http.H
 func processTaskAsync(log *slog.Logger, alias, code string, noiseLevel int, programmingLanguageId, userID int64, storage *database.Storage) {
 	log = log.With(slog.String("task_alias", alias), slog.Int64("user_id", userID))
 
-	processedCode, err := ProcessCode(code, noiseLevel, log)
+	processedCode, description, err := ProcessCode(code, noiseLevel, log)
 	if err != nil {
 		// Обновление статуса на "Error" в случае ошибки
 		errorStatus := database.TaskStatus{Status: "Error", Error: err.Error()}
@@ -172,7 +173,7 @@ func processTaskAsync(log *slog.Logger, alias, code string, noiseLevel int, prog
 	}
 
 	// Сохранение в PostgreSQL
-	_, _, err = storage.SaveNoisesCodeWithAlias(processedCode, code, programmingLanguageId, userID, alias)
+	_, _, err = storage.SaveNoisesCodeWithAlias(processedCode, code, programmingLanguageId, userID, alias, description)
 	if err != nil {
 		// Обновление статуса на "Error" в случае ошибки сохранения
 		errorStatus := database.TaskStatus{Status: "Error", Error: fmt.Sprintf("failed to save task: %v", err)}
@@ -190,7 +191,7 @@ func processTaskAsync(log *slog.Logger, alias, code string, noiseLevel int, prog
 }
 
 // Returns noised code
-func ProcessCode(code string, noiseLevel int, logger *slog.Logger) (string, error) {
+func ProcessCode(code string, noiseLevel int, logger *slog.Logger) (string, string, error) {
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	model := os.Getenv("MODEL")
 	temperature := 0.7
@@ -200,19 +201,19 @@ func ProcessCode(code string, noiseLevel int, logger *slog.Logger) (string, erro
 	prompts, err := openRouterAPI.LoadSystemPrompts("./config/noises_gen_prompt.yaml")
 	if err != nil {
 		logger.Error("failed to load system prompts", sl.Err(err))
-		return "", fmt.Errorf("failed to load system prompts: %v", err)
+		return "", "", fmt.Errorf("failed to load system prompts: %v", err)
 	}
 
 	systemPrompt, exists := prompts["system_prompt"]
 	if !exists {
 		logger.Error("noises prompt not found in YAML file")
-		return "", fmt.Errorf("noises prompt not found")
+		return "", "", fmt.Errorf("noises prompt not found")
 	}
 
 	response, err := client.SendChat(systemPrompt, "Уровень шума = "+strconv.Itoa(noiseLevel)+"/100\n"+code)
 	if err != nil {
 		logger.Error("failed to send request to OpenRouter", sl.Err(err))
-		return "", fmt.Errorf("failed to send request: %v", err)
+		return "", "", fmt.Errorf("failed to send request: %v", err)
 	}
 	fmt.Println("Response from OpenRouter:", response)
 
@@ -222,16 +223,16 @@ func ProcessCode(code string, noiseLevel int, logger *slog.Logger) (string, erro
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			logger.Error("request body is empty")
-			return "", fmt.Errorf("request body is empty")
+			return "", "", fmt.Errorf("request body is empty")
 		} else {
 			logger.Error("failed to decode request body", sl.Err(err))
-			return "", fmt.Errorf("failed to decode request: %v", err)
+			return "", "", fmt.Errorf("failed to decode request: %v", err)
 		}
 	}
 
 	logger.Info("LLM response body was decoded", slog.Any("decodedLLMResponse", decodedLLMResponse))
 
-	return decodedLLMResponse.NoisedCode, nil
+	return decodedLLMResponse.NoisedCode, decodedLLMResponse.Description, nil
 }
 
 func generateAlias(length int) string {

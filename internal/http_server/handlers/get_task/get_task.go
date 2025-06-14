@@ -14,6 +14,7 @@ import (
 
 type Response struct {
 	ResponseInfo response_info.ResponseInfo `json:"responseInfo"`
+	Description  string                     `json:"description"`
 	CodeToSolve  string                     `json:"codeToSolve"`
 	CanEdit      bool                       `json:"canEdit"`
 }
@@ -21,14 +22,16 @@ type Response struct {
 func getErrorResponse(msg string) *Response {
 	return &Response{
 		ResponseInfo: response_info.Error(msg),
+		Description:  "",
 		CodeToSolve:  "",
 		CanEdit:      false,
 	}
 }
 
-func getOKResponse(codeToSolve string, canEdit bool) *Response {
+func getOKResponse(codeToSolve string, canEdit bool, description string) *Response {
 	return &Response{
 		ResponseInfo: response_info.OK(),
+		Description:  description,
 		CodeToSolve:  codeToSolve,
 		CanEdit:      canEdit,
 	}
@@ -36,7 +39,6 @@ func getOKResponse(codeToSolve string, canEdit bool) *Response {
 
 // New retrieves a task by alias
 // @Summary Get task by alias
-// @Description Retrieves the processed code associated with the given alias from the database, including whether the user can edit the task.
 // @Tags Tasks
 // @Produce json
 // @Param alias path string true "Task alias"
@@ -80,7 +82,16 @@ func New(logger *slog.Logger, storage *database.Storage) http.HandlerFunc {
 		if err != nil {
 			log.Error("failed to get code", sl.Err(err))
 			writer.WriteHeader(http.StatusNotFound)
-			render.JSON(writer, request, getErrorResponse("task not found"))
+			render.JSON(writer, request, getErrorResponse("error while getting task code"))
+			return
+		}
+
+		// Получение описания задачи
+		description, err := storage.GetSavedTaskDescription(alias)
+		if err != nil {
+			log.Error("failed to get task description", sl.Err(err))
+			writer.WriteHeader(http.StatusNotFound)
+			render.JSON(writer, request, getErrorResponse("error while getting task description"))
 			return
 		}
 
@@ -98,6 +109,6 @@ func New(logger *slog.Logger, storage *database.Storage) http.HandlerFunc {
 
 		log.Info("got task by alias from db", slog.String("alias", alias), slog.Bool("canEdit", canEdit))
 		writer.WriteHeader(http.StatusOK)
-		render.JSON(writer, request, getOKResponse(codeFromDb, canEdit))
+		render.JSON(writer, request, getOKResponse(codeFromDb, canEdit, description))
 	}
 }

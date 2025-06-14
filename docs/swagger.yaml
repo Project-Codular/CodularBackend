@@ -178,7 +178,7 @@ definitions:
       status:
         type: string
     type: object
-host: localhost:8082
+host: api.codular.ru
 info:
   contact:
     email: support@swagger.io

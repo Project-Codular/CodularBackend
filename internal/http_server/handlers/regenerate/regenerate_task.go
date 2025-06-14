@@ -49,7 +49,6 @@ func getOKResponse(taskAlias string) *Response {
 
 // New regenerates an existing task by alias
 // @Summary Regenerate task by alias
-// @Description Regenerates the task associated with the given alias, updating its code and answers based on the task type (skips or noises). Requires user authorization and edit permissions.
 // @Tags Tasks
 // @Accept json
 // @Produce json
@@ -164,10 +163,11 @@ func processTaskAsync(log *slog.Logger, alias string, taskDetails database.TaskD
 	var answers []string
 	var err error
 
+	description := ""
 	if taskDetails.Type == "skips" {
-		processedCode, answers, err = skips.ProcessCode(taskDetails.UserOriginalCode, *req.SkipsNumber, log)
+		processedCode, answers, description, err = skips.ProcessCode(taskDetails.UserOriginalCode, *req.SkipsNumber, log)
 	} else if taskDetails.Type == "noises" {
-		processedCode, err = noises.ProcessCode(taskDetails.UserOriginalCode, *req.NoiseLevel, log)
+		processedCode, description, err = noises.ProcessCode(taskDetails.UserOriginalCode, *req.NoiseLevel, log)
 		answers = []string{taskDetails.UserOriginalCode} // Для noises ответ — оригинальный код
 	}
 
@@ -181,7 +181,7 @@ func processTaskAsync(log *slog.Logger, alias string, taskDetails database.TaskD
 	}
 
 	// Обновление задачи в PostgreSQL
-	err = storage.UpdateTaskCodeAndAnswers(taskDetails.TaskID, processedCode, answers)
+	err = storage.UpdateTaskCodeAndAnswers(taskDetails.TaskID, processedCode, answers, description)
 	if err != nil {
 		// Обновление статуса на "Error" в случае ошибки сохранения
 		errorStatus := database.TaskStatus{Status: "Error", Error: fmt.Sprintf("failed to update task: %v", err)}

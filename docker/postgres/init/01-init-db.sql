@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     type TEXT NOT NULL CHECK (type IN ('skips', 'noises')),
     taskCode TEXT NOT NULL,
     userOriginalCode TEXT,
+    description TEXT NOT NULL,
     answers TEXT[] NOT NULL,
     programming_language_id INTEGER NOT NULL,
     created_at TIMESTAMP NOT NULL,
