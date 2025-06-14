@@ -512,7 +512,7 @@ const docTemplate = `{
         },
         "/task/random": {
             "get": {
-                "description": "Redirects to a random public task with public = true. The redirected endpoint returns the task code and description.",
+                "description": "Redirects to a random public task with public = true, filtered by task type (skips, noises, or any), use this syntax: .../random?type=[type]. The redirected endpoint returns the task code and description.",
                 "produces": [
                     "application/json"
                 ],
@@ -520,6 +520,20 @@ const docTemplate = `{
                     "Task"
                 ],
                 "summary": "Get random public task",
+                "parameters": [
+                    {
+                        "enum": [
+                            "skips",
+                            "noises",
+                            "any"
+                        ],
+                        "type": "string",
+                        "default": "any",
+                        "description": "Task type (skips, noises, or any)",
+                        "name": "type",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "302": {
                         "description": "Redirect to /api/v1/task/{alias}",
@@ -527,8 +541,17 @@ const docTemplate = `{
                             "type": "string"
                         }
                     },
+                    "400": {
+                        "description": "Invalid task type",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
                     "404": {
-                        "description": "No public tasks found",
+                        "description": "No public tasks found for the specified type",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
