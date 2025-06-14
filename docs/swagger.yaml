@@ -48,6 +48,8 @@ definitions:
         type: boolean
       codeToSolve:
         type: string
+      description:
+        type: string
       responseInfo:
         $ref: '#/definitions/response_info.ResponseInfo'
     type: object
@@ -178,7 +180,7 @@ definitions:
       status:
         type: string
     type: object
-host: api.codular.ru
+host: localhost:8082
 info:
   contact:
     email: support@swagger.io
@@ -315,10 +317,12 @@ paths:
     post:
       consumes:
       - application/json
-      description: Processes the provided source code with a specified level of noise,
-        generates a unique alias, and saves it to the database.
+      description: Processes the provided source code with a specified noise level,
+        generates a unique alias, saves the task with its description to the database,
+        and initiates asynchronous processing. Returns the task alias for retrieving
+        the task code and description.
       parameters:
-      - description: Source code and level of noise
+      - description: Source code, noise level, and programming language
         in: body
         name: request
         required: true
@@ -328,18 +332,24 @@ paths:
       - application/json
       responses:
         "200":
-          description: Successfully generated and saved noise
+          description: Example response" Example({"responseInfo":{"status":"OK"},"taskAlias":"abc123"})
           schema:
             $ref: '#/definitions/noises.Response'
         "400":
-          description: Invalid request or empty body
+          description: Invalid request, empty body, or invalid programming language
+          schema:
+            $ref: '#/definitions/noises.Response'
+        "401":
+          description: Unauthorized
           schema:
             $ref: '#/definitions/noises.Response'
         "500":
           description: Internal server error
           schema:
             $ref: '#/definitions/noises.Response'
-      summary: Generate and save noise for code
+      security:
+      - Bearer: []
+      summary: Generate and save noised code
       tags:
       - Noises
   /noises/solve:
@@ -383,8 +393,9 @@ paths:
       consumes:
       - application/json
       description: Processes the provided source code with a specified number of skips,
-        generates a unique alias, and saves initial status to Redis. Returns the task
-        alias for status checking.
+        generates a unique alias, saves the task with its description to the database,
+        and initiates asynchronous processing. Returns the task alias for retrieving
+        the task code and description.
       parameters:
       - description: Source code, number of skips, and programming language
         in: body
@@ -400,14 +411,20 @@ paths:
           schema:
             $ref: '#/definitions/skips.Response'
         "400":
-          description: Invalid request or empty body
+          description: Invalid request, empty body, or invalid programming language
+          schema:
+            $ref: '#/definitions/skips.Response'
+        "401":
+          description: Unauthorized
           schema:
             $ref: '#/definitions/skips.Response'
         "500":
           description: Internal server error
           schema:
             $ref: '#/definitions/skips.Response'
-      summary: Generate and save skips for code
+      security:
+      - Bearer: []
+      summary: Generate and save skips code
       tags:
       - Skips
   /skips/solve:
@@ -513,8 +530,8 @@ paths:
       - Skips
   /task/{alias}:
     get:
-      description: Retrieves the processed code associated with the given alias from
-        the database, including whether the user can edit the task.
+      description: Retrieves a task by its alias, returning the task code, description
+        (title), and edit permissions for the authenticated user. Requires user authorization.
       parameters:
       - description: Task alias
         in: path
@@ -525,8 +542,8 @@ paths:
       - application/json
       responses:
         "200":
-          description: Example response" Example({"responseInfo":{"status":"OK"},"codeToSolve":"processed
-            code","canEdit":true})
+          description: Example response" Example({"responseInfo":{"status":"OK"},"description":"String
+            concatenation task","codeToSolve":"s1 + s2","canEdit":true})
           schema:
             $ref: '#/definitions/get_task.Response'
         "400":
@@ -538,13 +555,15 @@ paths:
           schema:
             $ref: '#/definitions/get_task.Response'
         "404":
-          description: Task not found
+          description: Task not found or error retrieving task data
           schema:
             $ref: '#/definitions/get_task.Response'
         "500":
           description: Internal server error
           schema:
             $ref: '#/definitions/get_task.Response'
+      security:
+      - Bearer: []
       summary: Get task by alias
       tags:
       - Tasks
@@ -552,9 +571,10 @@ paths:
     patch:
       consumes:
       - application/json
-      description: Regenerates the task associated with the given alias, updating
-        its code and answers based on the task type (skips or noises). Requires user
-        authorization and edit permissions.
+      description: Regenerates an existing task (skips or noises) by its alias with
+        optional new parameters (skips number or noise level). Updates the task code
+        and description in the database. Requires user authorization and edit permissions.
+        Returns the task alias for retrieving the updated task code and description.
       parameters:
       - description: Task alias
         in: path
@@ -575,7 +595,8 @@ paths:
           schema:
             $ref: '#/definitions/regenerate.Response'
         "400":
-          description: Invalid request or task alias is empty
+          description: Invalid request, task alias is empty, or required parameters
+            missing
           schema:
             $ref: '#/definitions/regenerate.Response'
         "401":
@@ -594,6 +615,8 @@ paths:
           description: Internal server error
           schema:
             $ref: '#/definitions/regenerate.Response'
+      security:
+      - Bearer: []
       summary: Regenerate task by alias
       tags:
       - Tasks
@@ -647,7 +670,8 @@ paths:
       - Task
   /task/random:
     get:
-      description: Redirects to a random public task with public = true.
+      description: Redirects to a random public task with public = true. The redirected
+        endpoint returns the task code and description.
       produces:
       - application/json
       responses:

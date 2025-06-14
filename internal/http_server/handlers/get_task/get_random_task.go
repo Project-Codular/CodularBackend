@@ -8,9 +8,9 @@ import (
 	"net/http"
 )
 
-// RandomTask перенаправляет на случайную публичную задачу
+// RandomTask redirects to a random public task.
 // @Summary Get random public task
-// @Description Redirects to a random public task with public = true.
+// @Description Redirects to a random public task with public = true. The redirected endpoint returns the task code and description.
 // @Tags Task
 // @Produce json
 // @Success 302 {string} string "Redirect to /api/v1/task/{alias}"

@@ -60,15 +60,18 @@ func getOKResponse(taskAlias string) *Response {
 }
 
 // New generates noise for the provided code and saves it to the database.
-// @Summary Generate and save noise for code
-// @Description Processes the provided source code with a specified level of noise, generates a unique alias, and saves it to the database.
+// @Summary Generate and save noised code
+// @Description Processes the provided source code with a specified noise level, generates a unique alias, saves the task with its description to the database, and initiates asynchronous processing. Returns the task alias for retrieving the task code and description.
 // @Tags Noises
 // @Accept json
 // @Produce json
-// @Param request body Request true "Source code and level of noise"
-// @Success 200 {object} Response "Successfully generated and saved noise"
-// @Failure 400 {object} Response "Invalid request or empty body"
-// @Failure 500 {object} Response "Internal server error"
+// @Param request body Request true "Source code, noise level, and programming language"
+// @Success 200 {object} noises.Response "Successfully initiated noise generation"
+// @Success 200 {object} noises.Response "Example response" Example({"responseInfo":{"status":"OK"},"taskAlias":"abc123"})
+// @Failure 400 {object} noises.Response "Invalid request, empty body, or invalid programming language"
+// @Failure 401 {object} noises.Response "Unauthorized"
+// @Failure 500 {object} noises.Response "Internal server error"
+// @Security Bearer
 // @Router /noises/generate [post]
 func New(log *slog.Logger, storage *database.Storage, cfg *config.Config) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {

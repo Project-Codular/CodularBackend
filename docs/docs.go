@@ -200,7 +200,12 @@ const docTemplate = `{
         },
         "/noises/generate": {
             "post": {
-                "description": "Processes the provided source code with a specified level of noise, generates a unique alias, and saves it to the database.",
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Processes the provided source code with a specified noise level, generates a unique alias, saves the task with its description to the database, and initiates asynchronous processing. Returns the task alias for retrieving the task code and description.",
                 "consumes": [
                     "application/json"
                 ],
@@ -210,10 +215,10 @@ const docTemplate = `{
                 "tags": [
                     "Noises"
                 ],
-                "summary": "Generate and save noise for code",
+                "summary": "Generate and save noised code",
                 "parameters": [
                     {
-                        "description": "Source code and level of noise",
+                        "description": "Source code, noise level, and programming language",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -224,13 +229,19 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Successfully generated and saved noise",
+                        "description": "Example response\" Example({\"responseInfo\":{\"status\":\"OK\"},\"taskAlias\":\"abc123\"})",
                         "schema": {
                             "$ref": "#/definitions/noises.Response"
                         }
                     },
                     "400": {
-                        "description": "Invalid request or empty body",
+                        "description": "Invalid request, empty body, or invalid programming language",
+                        "schema": {
+                            "$ref": "#/definitions/noises.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/noises.Response"
                         }
@@ -298,7 +309,12 @@ const docTemplate = `{
         },
         "/skips/generate": {
             "post": {
-                "description": "Processes the provided source code with a specified number of skips, generates a unique alias, and saves initial status to Redis. Returns the task alias for status checking.",
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Processes the provided source code with a specified number of skips, generates a unique alias, saves the task with its description to the database, and initiates asynchronous processing. Returns the task alias for retrieving the task code and description.",
                 "consumes": [
                     "application/json"
                 ],
@@ -308,7 +324,7 @@ const docTemplate = `{
                 "tags": [
                     "Skips"
                 ],
-                "summary": "Generate and save skips for code",
+                "summary": "Generate and save skips code",
                 "parameters": [
                     {
                         "description": "Source code, number of skips, and programming language",
@@ -328,7 +344,13 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid request or empty body",
+                        "description": "Invalid request, empty body, or invalid programming language",
+                        "schema": {
+                            "$ref": "#/definitions/skips.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/skips.Response"
                         }
@@ -490,7 +512,7 @@ const docTemplate = `{
         },
         "/task/random": {
             "get": {
-                "description": "Redirects to a random public task with public = true.",
+                "description": "Redirects to a random public task with public = true. The redirected endpoint returns the task code and description.",
                 "produces": [
                     "application/json"
                 ],
@@ -528,7 +550,12 @@ const docTemplate = `{
         },
         "/task/{alias}": {
             "get": {
-                "description": "Retrieves the processed code associated with the given alias from the database, including whether the user can edit the task.",
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Retrieves a task by its alias, returning the task code, description (title), and edit permissions for the authenticated user. Requires user authorization.",
                 "produces": [
                     "application/json"
                 ],
@@ -547,7 +574,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Example response\" Example({\"responseInfo\":{\"status\":\"OK\"},\"codeToSolve\":\"processed code\",\"canEdit\":true})",
+                        "description": "Example response\" Example({\"responseInfo\":{\"status\":\"OK\"},\"description\":\"String concatenation task\",\"codeToSolve\":\"s1 + s2\",\"canEdit\":true})",
                         "schema": {
                             "$ref": "#/definitions/get_task.Response"
                         }
@@ -565,7 +592,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Task not found",
+                        "description": "Task not found or error retrieving task data",
                         "schema": {
                             "$ref": "#/definitions/get_task.Response"
                         }
@@ -581,7 +608,12 @@ const docTemplate = `{
         },
         "/task/{alias}/regenerate": {
             "patch": {
-                "description": "Regenerates the task associated with the given alias, updating its code and answers based on the task type (skips or noises). Requires user authorization and edit permissions.",
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Regenerates an existing task (skips or noises) by its alias with optional new parameters (skips number or noise level). Updates the task code and description in the database. Requires user authorization and edit permissions. Returns the task alias for retrieving the updated task code and description.",
                 "consumes": [
                     "application/json"
                 ],
@@ -618,7 +650,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid request or task alias is empty",
+                        "description": "Invalid request, task alias is empty, or required parameters missing",
                         "schema": {
                             "$ref": "#/definitions/regenerate.Response"
                         }
@@ -794,6 +826,9 @@ const docTemplate = `{
                     "type": "boolean"
                 },
                 "codeToSolve": {
+                    "type": "string"
+                },
+                "description": {
                     "type": "string"
                 },
                 "responseInfo": {

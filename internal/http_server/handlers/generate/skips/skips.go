@@ -60,17 +60,19 @@ func getOKResponse(taskAlias string) *Response {
 	}
 }
 
-// New generates skips for the provided code and saves initial status to Redis
-// @Summary Generate and save skips for code
-// @Description Processes the provided source code with a specified number of skips, generates a unique alias, and saves initial status to Redis. Returns the task alias for status checking.
+// New generates skips for the provided code and saves it to the database.
+// @Summary Generate and save skips code
+// @Description Processes the provided source code with a specified number of skips, generates a unique alias, saves the task with its description to the database, and initiates asynchronous processing. Returns the task alias for retrieving the task code and description.
 // @Tags Skips
 // @Accept json
 // @Produce json
 // @Param request body Request true "Source code, number of skips, and programming language"
-// @Success 200 {object} Response "Successfully initiated skips generation with task alias"
-// @Success 200 {object} Response "Example response" Example({"responseInfo":{"status":"OK"},"taskAlias":"abc123"})
-// @Failure 400 {object} Response "Invalid request or empty body"
-// @Failure 500 {object} Response "Internal server error"
+// @Success 200 {object} skips.Response "Successfully initiated skips generation"
+// @Success 200 {object} skips.Response "Example response" Example({"responseInfo":{"status":"OK"},"taskAlias":"abc123"})
+// @Failure 400 {object} skips.Response "Invalid request, empty body, or invalid programming language"
+// @Failure 401 {object} skips.Response "Unauthorized"
+// @Failure 500 {object} skips.Response "Internal server error"
+// @Security Bearer
 // @Router /skips/generate [post]
 func New(log *slog.Logger, storage *database.Storage, cfg *config.Config) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {

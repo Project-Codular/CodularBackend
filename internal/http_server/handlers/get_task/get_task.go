@@ -37,17 +37,19 @@ func getOKResponse(codeToSolve string, canEdit bool, description string) *Respon
 	}
 }
 
-// New retrieves a task by alias
+// New retrieves a task by alias.
 // @Summary Get task by alias
+// @Description Retrieves a task by its alias, returning the task code, description (title), and edit permissions for the authenticated user. Requires user authorization.
 // @Tags Tasks
 // @Produce json
 // @Param alias path string true "Task alias"
-// @Success 200 {object} Response "Successfully retrieved task"
-// @Success 200 {object} Response "Example response" Example({"responseInfo":{"status":"OK"},"codeToSolve":"processed code","canEdit":true})
-// @Failure 400 {object} Response "Task alias is empty"
-// @Failure 401 {object} Response "Unauthorized"
-// @Failure 404 {object} Response "Task not found"
-// @Failure 500 {object} Response "Internal server error"
+// @Success 200 {object} get_task.Response "Successfully retrieved task"
+// @Success 200 {object} get_task.Response "Example response" Example({"responseInfo":{"status":"OK"},"description":"String concatenation task","codeToSolve":"s1 + s2","canEdit":true})
+// @Failure 400 {object} get_task.Response "Task alias is empty"
+// @Failure 401 {object} get_task.Response "Unauthorized"
+// @Failure 404 {object} get_task.Response "Task not found or error retrieving task data"
+// @Failure 500 {object} get_task.Response "Internal server error"
+// @Security Bearer
 // @Router /task/{alias} [get]
 func New(logger *slog.Logger, storage *database.Storage) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {

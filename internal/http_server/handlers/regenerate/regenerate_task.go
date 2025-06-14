@@ -47,20 +47,22 @@ func getOKResponse(taskAlias string) *Response {
 	}
 }
 
-// New regenerates an existing task by alias
+// New regenerates an existing task by alias.
 // @Summary Regenerate task by alias
+// @Description Regenerates an existing task (skips or noises) by its alias with optional new parameters (skips number or noise level). Updates the task code and description in the database. Requires user authorization and edit permissions. Returns the task alias for retrieving the updated task code and description.
 // @Tags Tasks
 // @Accept json
 // @Produce json
 // @Param alias path string true "Task alias"
 // @Param request body Request true "Optional skips number or noise level"
-// @Success 200 {object} Response "Successfully initiated task regeneration"
-// @Success 200 {object} Response "Example response" Example({"responseInfo":{"status":"OK"},"taskAlias":"abc123"})
-// @Failure 400 {object} Response "Invalid request or task alias is empty"
-// @Failure 401 {object} Response "Unauthorized"
-// @Failure 403 {object} Response "Forbidden: user does not have edit permissions"
-// @Failure 404 {object} Response "Task not found"
-// @Failure 500 {object} Response "Internal server error"
+// @Success 200 {object} regenerate.Response "Successfully initiated task regeneration"
+// @Success 200 {object} regenerate.Response "Example response" Example({"responseInfo":{"status":"OK"},"taskAlias":"abc123"})
+// @Failure 400 {object} regenerate.Response "Invalid request, task alias is empty, or required parameters missing"
+// @Failure 401 {object} regenerate.Response "Unauthorized"
+// @Failure 403 {object} regenerate.Response "Forbidden: user does not have edit permissions"
+// @Failure 404 {object} regenerate.Response "Task not found"
+// @Failure 500 {object} regenerate.Response "Internal server error"
+// @Security Bearer
 // @Router /task/{alias}/regenerate [patch]
 func New(logger *slog.Logger, storage *database.Storage) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
