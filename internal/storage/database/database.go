@@ -230,16 +230,29 @@ func (s *Storage) GetTaskStatus(alias string) (TaskStatus, error) {
 
 // GetRandomPublicTaskAlias возвращает случайный алиас публичной задачи
 func (s *Storage) GetRandomPublicTaskAlias() (string, error) {
+	return s.GetRandomPublicTaskAliasByType("any")
+}
+
+// GetRandomPublicTaskAliasByType возвращает случайный алиас публичной задачи по указанному типу
+func (s *Storage) GetRandomPublicTaskAliasByType(taskType string) (string, error) {
 	query := `
         SELECT aliases.alias
         FROM aliases
         JOIN tasks ON aliases.task_id = tasks.id
         WHERE tasks.public = TRUE
+    `
+	args := []interface{}{}
+	if taskType != "any" {
+		query += ` AND tasks.type = $1`
+		args = append(args, taskType)
+	}
+	query += `
         ORDER BY RANDOM()
         LIMIT 1
     `
+
 	var alias string
-	err := s.db.QueryRow(context.Background(), query).Scan(&alias)
+	err := s.db.QueryRow(context.Background(), query, args...).Scan(&alias)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", fmt.Errorf("no public tasks found")
 	}
