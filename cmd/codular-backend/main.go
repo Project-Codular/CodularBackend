@@ -10,6 +10,7 @@ import (
 	"codular-backend/internal/http_server/handlers/get_status/submission_status"
 	"codular-backend/internal/http_server/handlers/get_status/task_status"
 	"codular-backend/internal/http_server/handlers/get_task"
+	"codular-backend/internal/http_server/handlers/get_user_email"
 	"codular-backend/internal/http_server/handlers/regenerate"
 	"codular-backend/internal/http_server/handlers/solve/noises_check"
 	"codular-backend/internal/http_server/handlers/solve/skips_check"
@@ -111,6 +112,7 @@ func main() {
 		// Роуты с авторизацией
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.AuthMiddleware(jwtSecret, logger))
+			r.Get("/user/email", get_user_email.GetUserEmail(logger, storage))
 			r.Post("/skips/generate", skips.New(logger, storage, cfg))
 			r.Post("/noises/generate", noises.New(logger, storage, cfg))
 			r.Post("/skips/solve", skips_check.New(logger, storage))

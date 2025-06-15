@@ -50,6 +50,24 @@ type TaskDetails struct {
 	ProgrammingLanguageID int64  `json:"programming_language_id"`
 }
 
+// GetUserEmailByID возвращает email пользователя по его ID
+func (s *Storage) GetUserEmailByID(userID int64) (string, error) {
+	query := `
+        SELECT email
+        FROM users
+        WHERE id = $1
+    `
+	var email string
+	err := s.db.QueryRow(context.Background(), query, userID).Scan(&email)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", fmt.Errorf("user not found")
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to get user email: %v", err)
+	}
+	return email, nil
+}
+
 // CreateUser создаёт нового пользователя
 func (s *Storage) CreateUser(email, passwordHash string) (int64, error) {
 	query := `
