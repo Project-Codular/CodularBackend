@@ -53,6 +53,13 @@ definitions:
       responseInfo:
         $ref: '#/definitions/response_info.ResponseInfo'
     type: object
+  get_user_email.Response:
+    properties:
+      email:
+        type: string
+      responseInfo:
+        $ref: '#/definitions/response_info.ResponseInfo'
+    type: object
   noises.Request:
     properties:
       noiseLevel:
@@ -711,6 +718,34 @@ paths:
       summary: Get random public task
       tags:
       - Task
+  /user/email:
+    get:
+      description: Retrieves the email of the authenticated user based on the access
+        token provided in the Authorization header.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Example response" Example({"responseInfo":{"status":"OK"},"email":"user@example.com"})
+          schema:
+            $ref: '#/definitions/get_user_email.Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/get_user_email.Response'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/get_user_email.Response'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/get_user_email.Response'
+      security:
+      - Bearer: []
+      summary: Get user email
+      tags:
+      - User
 securityDefinitions:
   Bearer:
     in: header

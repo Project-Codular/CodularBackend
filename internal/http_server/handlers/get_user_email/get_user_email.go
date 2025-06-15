@@ -35,11 +35,11 @@ func getOKResponse(email string) *Response {
 // @Description Retrieves the email of the authenticated user based on the access token provided in the Authorization header.
 // @Tags User
 // @Produce json
-// @Success 200 {object} user.Response "Successfully retrieved user email"
-// @Success 200 {object} user.Response "Example response" Example({"responseInfo":{"status":"OK"},"email":"user@example.com"})
-// @Failure 401 {object} user.Response "Unauthorized"
-// @Failure 404 {object} user.Response "User not found"
-// @Failure 500 {object} user.Response "Internal server error"
+// @Success 200 {object} get_user_email.Response "Successfully retrieved user email"
+// @Success 200 {object} get_user_email.Response "Example response" Example({"responseInfo":{"status":"OK"},"email":"user@example.com"})
+// @Failure 401 {object} get_user_email.Response "Unauthorized"
+// @Failure 404 {object} get_user_email.Response "User not found"
+// @Failure 500 {object} get_user_email.Response "Internal server error"
 // @Security Bearer
 // @Router /user/email [get]
 func GetUserEmail(logger *slog.Logger, storage *database.Storage) http.HandlerFunc {

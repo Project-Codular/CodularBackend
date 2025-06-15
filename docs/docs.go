@@ -775,6 +775,49 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/user/email": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Retrieves the email of the authenticated user based on the access token provided in the Authorization header.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "User"
+                ],
+                "summary": "Get user email",
+                "responses": {
+                    "200": {
+                        "description": "Example response\" Example({\"responseInfo\":{\"status\":\"OK\"},\"email\":\"user@example.com\"})",
+                        "schema": {
+                            "$ref": "#/definitions/get_user_email.Response"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/get_user_email.Response"
+                        }
+                    },
+                    "404": {
+                        "description": "User not found",
+                        "schema": {
+                            "$ref": "#/definitions/get_user_email.Response"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/get_user_email.Response"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -852,6 +895,17 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "description": {
+                    "type": "string"
+                },
+                "responseInfo": {
+                    "$ref": "#/definitions/response_info.ResponseInfo"
+                }
+            }
+        },
+        "get_user_email.Response": {
+            "type": "object",
+            "properties": {
+                "email": {
                     "type": "string"
                 },
                 "responseInfo": {
