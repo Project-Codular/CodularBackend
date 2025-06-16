@@ -20,6 +20,7 @@ type Response struct {
 	ProgrammingLang string                     `json:"programmingLang"`
 	CodeToSolve     string                     `json:"codeToSolve"`
 	CanEdit         bool                       `json:"canEdit"`
+	IsPublic        bool                       `json:"isPublic"`
 }
 
 func getErrorResponse(msg string) *Response {
@@ -30,10 +31,11 @@ func getErrorResponse(msg string) *Response {
 		TaskType:        "",
 		ProgrammingLang: "",
 		CanEdit:         false,
+		IsPublic:        false,
 	}
 }
 
-func getOKResponse(codeToSolve string, canEdit bool, description string, taskType string, programmingLang string) *Response {
+func getOKResponse(codeToSolve string, canEdit bool, description string, taskType string, programmingLang string, isPublic bool) *Response {
 	return &Response{
 		ResponseInfo:    response_info.OK(),
 		Description:     description,
@@ -41,6 +43,7 @@ func getOKResponse(codeToSolve string, canEdit bool, description string, taskTyp
 		ProgrammingLang: programmingLang,
 		CodeToSolve:     codeToSolve,
 		CanEdit:         canEdit,
+		IsPublic:        isPublic,
 	}
 }
 
@@ -127,6 +130,6 @@ func New(logger *slog.Logger, storage *database.Storage) http.HandlerFunc {
 
 		log.Info("got task by alias from db", slog.String("alias", alias), slog.Bool("canEdit", canEdit))
 		writer.WriteHeader(http.StatusOK)
-		render.JSON(writer, request, getOKResponse(codeFromDb, canEdit, description, taskDetails.Type, programmingLanguageName))
+		render.JSON(writer, request, getOKResponse(codeFromDb, canEdit, description, taskDetails.Type, programmingLanguageName, taskDetails.IsPublic))
 	}
 }

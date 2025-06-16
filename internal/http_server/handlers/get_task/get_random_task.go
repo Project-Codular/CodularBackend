@@ -2,11 +2,40 @@ package get_task
 
 import (
 	"codular-backend/internal/storage/database"
+	response_info "codular-backend/lib/api/response"
 	"codular-backend/lib/logger/sl"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/render"
+	"github.com/go-playground/validator/v10"
 	"log/slog"
 	"net/http"
 )
+
+type RandomTaskResponse struct {
+	ResponseInfo response_info.ResponseInfo `json:"responseInfo"`
+	TaskAlias    string                     `json:"taskAlias"`
+}
+
+func getErrorResponseRandomTask(msg string) *RandomTaskResponse {
+	return &RandomTaskResponse{
+		ResponseInfo: response_info.Error(msg),
+		TaskAlias:    "",
+	}
+}
+
+func getValidationErrorResponseRandomTask(validationErrors validator.ValidationErrors) *RandomTaskResponse {
+	return &RandomTaskResponse{
+		ResponseInfo: response_info.ValidationError(validationErrors),
+		TaskAlias:    "",
+	}
+}
+
+func getOKResponseRandomTask(taskAlias string) *RandomTaskResponse {
+	return &RandomTaskResponse{
+		ResponseInfo: response_info.OK(),
+		TaskAlias:    taskAlias,
+	}
+}
 
 // RandomTask redirects to a random public task.
 // @Summary Get random public task
@@ -38,7 +67,7 @@ func RandomTask(log *slog.Logger, storage *database.Storage) http.HandlerFunc {
 		if taskType != "skips" && taskType != "noises" && taskType != "any" {
 			log.Error("invalid task type", slog.String("type", taskType))
 			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte(`{"error":"invalid task type"}`))
+			render.JSON(w, r, getErrorResponse("invalid task type"))
 			return
 		}
 
@@ -55,12 +84,11 @@ func RandomTask(log *slog.Logger, storage *database.Storage) http.HandlerFunc {
 			}
 			log.Error("failed to get random public task", sl.Err(err))
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(`{"error":"internal server error"}`))
+			render.JSON(w, r, getErrorResponse("failed to get random public task"))
 			return
 		}
 
-		redirectURL := "/api/v1/task/" + alias
-		log.Info("redirecting to random public task", slog.String("alias", alias), slog.String("type", taskType))
-		http.Redirect(w, r, redirectURL, http.StatusFound)
+		log.Info("sending random public task alias", slog.String("alias", alias), slog.String("type", taskType))
+		render.JSON(w, r, getOKResponseRandomTask(alias))
 	}
 }

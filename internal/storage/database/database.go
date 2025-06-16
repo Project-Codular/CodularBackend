@@ -45,6 +45,7 @@ type TaskDetails struct {
 	TaskID                int64  `json:"task_id"`
 	UserID                int64  `json:"user_id"`
 	Type                  string `json:"type"`
+	IsPublic              bool   `json:"isPublic"`
 	UserOriginalCode      string `json:"user_original_code"`
 	Description           string `json:"description"`
 	ProgrammingLanguageID int64  `json:"programming_language_id"`
@@ -158,7 +159,7 @@ func (s *Storage) DeleteToken(token, tokenType string) error {
 // GetTaskDetailsByAlias возвращает детали задачи по алиасу
 func (s *Storage) GetTaskDetailsByAlias(alias string) (TaskDetails, error) {
 	query := `
-        SELECT tasks.id, tasks.user_id, tasks.type, tasks.userOriginalCode, tasks.programming_language_id, tasks.description
+        SELECT tasks.id, tasks.user_id, tasks.type, tasks.userOriginalCode, tasks.programming_language_id, tasks.description, tasks.public
         FROM tasks
         JOIN aliases ON tasks.id = aliases.task_id
         WHERE aliases.alias = $1
@@ -171,6 +172,7 @@ func (s *Storage) GetTaskDetailsByAlias(alias string) (TaskDetails, error) {
 		&details.UserOriginalCode,
 		&details.ProgrammingLanguageID,
 		&details.Description,
+		&details.IsPublic,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return TaskDetails{}, fmt.Errorf("task not found")
@@ -477,8 +479,8 @@ func (s *Storage) GetCodeAnswers(codeAlias string) ([]string, error) {
 // SavePendingSubmission сохраняет новую посылку
 func (s *Storage) SavePendingSubmission(taskAlias string, submissionCode []string) (int64, error) {
 	query := `
-        INSERT INTO submissions (task_alias, submission_code, status, hints, submitted_at)
-        VALUES ($1, $2, 'Pending', NULL, $3)
+        INSERT INTO submissions (task_alias, submission_code, status, hints, submitted_at, score)
+        VALUES ($1, $2, 'Pending', NULL, $3, -1)
         RETURNING id
     `
 	var id int64
@@ -502,7 +504,7 @@ func (s *Storage) GetSubmissionStatus(submissionID int64) (string, error) {
         WHERE id = $1
     `
 	var status string
-	err := s.db.QueryRow(context.Background(), query, submissionID).Scan(&status)
+	err := s.db.QueryRow(context.Background(), query, status).Scan(&status)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", fmt.Errorf("submission not found")
 	}

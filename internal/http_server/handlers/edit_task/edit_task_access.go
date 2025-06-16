@@ -14,7 +14,7 @@ import (
 )
 
 type SetPublicRequest struct {
-	Public bool `json:"public" validate:"required"`
+	Public *bool `json:"public" validate:"required"`
 }
 
 type SetPublicResponse struct {
@@ -122,14 +122,14 @@ func ChangeAccess(log *slog.Logger, storage *database.Storage) http.HandlerFunc 
 		}
 
 		// Обновление статуса public
-		if err := storage.UpdateTaskPublicStatus(taskDetails.TaskID, req.Public); err != nil {
+		if err := storage.UpdateTaskPublicStatus(taskDetails.TaskID, *req.Public); err != nil {
 			log.Error("failed to update task public status", sl.Err(err))
 			w.WriteHeader(http.StatusInternalServerError)
 			render.JSON(w, r, getErrorResponse("internal server error"))
 			return
 		}
 
-		log.Info("task public status updated", slog.String("alias", alias), slog.Bool("public", req.Public))
+		log.Info("task public status updated", slog.String("alias", alias), slog.Bool("public", *req.Public))
 		w.WriteHeader(http.StatusOK)
 		render.JSON(w, r, getOKResponse(alias))
 	}
