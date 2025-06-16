@@ -9,7 +9,9 @@ import (
 	"codular-backend/internal/http_server/handlers/generate/skips"
 	"codular-backend/internal/http_server/handlers/get_status/submission_status"
 	"codular-backend/internal/http_server/handlers/get_status/task_status"
-	"codular-backend/internal/http_server/handlers/get_task"
+	"codular-backend/internal/http_server/handlers/get_task/get_random_task"
+	"codular-backend/internal/http_server/handlers/get_task/get_task"
+	"codular-backend/internal/http_server/handlers/get_task_list"
 	"codular-backend/internal/http_server/handlers/get_user_email"
 	"codular-backend/internal/http_server/handlers/regenerate"
 	"codular-backend/internal/http_server/handlers/solve/noises_check"
@@ -78,7 +80,7 @@ func main() {
 	router := chi.NewRouter()
 
 	router.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"https://i-am-a-saw.github.io", "http://172.24.112.1:8082", "http://localhost:3000", "http://localhost:5175", "http://localhost:63342"},
+		AllowedOrigins:   []string{"https://codular.ru", "https://i-am-a-saw.github.io", "http://172.24.112.1:8082", "http://localhost:3000", "http://localhost:5175", "http://localhost:63342"},
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type", "content-type", "Authorization", "X-Requested-With"},
 		AllowCredentials: true,
@@ -106,7 +108,8 @@ func main() {
 			r.Post("/auth/login", auth.Login(logger, storage, jwtSecret))
 			r.Post("/auth/refresh", auth.Refresh(logger, storage, jwtSecret))
 			r.Post("/auth/logout", auth.Logout(logger, storage))
-			r.Get("/task/random", get_task.RandomTask(logger, storage))
+			r.Get("/task/random", get_random_task.RandomTask(logger, storage))
+			r.Get("/tasks", get_task_list.ListTasks(logger, storage))
 		})
 
 		// Роуты с авторизацией

@@ -51,6 +51,15 @@ type TaskDetails struct {
 	ProgrammingLanguageID int64  `json:"programming_language_id"`
 }
 
+type Task struct {
+	Alias               string `json:"alias"`
+	TaskID              int64  `json:"task_id"`
+	Type                string `json:"type"`
+	Description         string `json:"description"`
+	ProgrammingLanguage string `json:"programming_language"`
+	CreatedAt           string `json:"created_at"`
+}
+
 // GetUserEmailByID возвращает email пользователя по его ID
 func (s *Storage) GetUserEmailByID(userID int64) (string, error) {
 	query := `
@@ -154,6 +163,65 @@ func (s *Storage) DeleteToken(token, tokenType string) error {
 		return fmt.Errorf("failed to delete token: %v", err)
 	}
 	return nil
+}
+
+// ListPublicTasks возвращает список публичных задач с пагинацией
+func (s *Storage) ListPublicTasks(taskType string, offset, limit int) ([]Task, int, error) {
+	// Query for tasks
+	query := `
+        SELECT aliases.alias, tasks.id, tasks.type, tasks.description, programming_languages.name, tasks.created_at
+        FROM aliases
+        JOIN tasks ON aliases.task_id = tasks.id
+        JOIN programming_languages ON tasks.programming_language_id = programming_languages.id
+        WHERE tasks.public = TRUE
+    `
+	args := []interface{}{}
+	if taskType != "any" {
+		query += ` AND tasks.type = $1`
+		args = append(args, taskType)
+	}
+	query += `
+        ORDER BY tasks.created_at DESC
+        LIMIT $` + fmt.Sprintf("%d", len(args)+1) + ` OFFSET $` + fmt.Sprintf("%d", len(args)+2)
+	args = append(args, limit, offset)
+
+	rows, err := s.db.Query(context.Background(), query, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query tasks: %v", err)
+	}
+	defer rows.Close()
+
+	var tasks []Task
+	for rows.Next() {
+		var task Task
+		var createdAt time.Time
+		err := rows.Scan(&task.Alias, &task.TaskID, &task.Type, &task.Description, &task.ProgrammingLanguage, &createdAt)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to scan task: %v", err)
+		}
+		task.CreatedAt = createdAt.Format(time.RFC3339)
+		tasks = append(tasks, task)
+	}
+
+	// Query for total count
+	countQuery := `
+        SELECT COUNT(*)
+        FROM aliases
+        JOIN tasks ON aliases.task_id = tasks.id
+        WHERE tasks.public = TRUE
+    `
+	countArgs := []interface{}{}
+	if taskType != "any" {
+		countQuery += ` AND tasks.type = $1`
+		countArgs = append(countArgs, taskType)
+	}
+	var total int
+	err = s.db.QueryRow(context.Background(), countQuery, countArgs...).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query total count: %v", err)
+	}
+
+	return tasks, total, nil
 }
 
 // GetTaskDetailsByAlias возвращает детали задачи по алиасу

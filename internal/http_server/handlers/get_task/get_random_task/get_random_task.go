@@ -1,4 +1,4 @@
-package get_task
+package get_random_task
 
 import (
 	"codular-backend/internal/storage/database"
@@ -11,27 +11,27 @@ import (
 	"net/http"
 )
 
-type RandomTaskResponse struct {
+type Response struct {
 	ResponseInfo response_info.ResponseInfo `json:"responseInfo"`
 	TaskAlias    string                     `json:"taskAlias"`
 }
 
-func getErrorResponseRandomTask(msg string) *RandomTaskResponse {
-	return &RandomTaskResponse{
+func getErrorResponse(msg string) *Response {
+	return &Response{
 		ResponseInfo: response_info.Error(msg),
 		TaskAlias:    "",
 	}
 }
 
-func getValidationErrorResponseRandomTask(validationErrors validator.ValidationErrors) *RandomTaskResponse {
-	return &RandomTaskResponse{
+func getValidationErrorResponse(validationErrors validator.ValidationErrors) *Response {
+	return &Response{
 		ResponseInfo: response_info.ValidationError(validationErrors),
 		TaskAlias:    "",
 	}
 }
 
-func getOKResponseRandomTask(taskAlias string) *RandomTaskResponse {
-	return &RandomTaskResponse{
+func getOKResponse(taskAlias string) *Response {
+	return &Response{
 		ResponseInfo: response_info.OK(),
 		TaskAlias:    taskAlias,
 	}
@@ -89,6 +89,6 @@ func RandomTask(log *slog.Logger, storage *database.Storage) http.HandlerFunc {
 		}
 
 		log.Info("sending random public task alias", slog.String("alias", alias), slog.String("type", taskType))
-		render.JSON(w, r, getOKResponseRandomTask(alias))
+		render.JSON(w, r, getOKResponse(alias))
 	}
 }
