@@ -10,30 +10,37 @@ import (
 	"github.com/go-chi/render"
 	"log/slog"
 	"net/http"
+	"strconv"
 )
 
 type Response struct {
-	ResponseInfo response_info.ResponseInfo `json:"responseInfo"`
-	Description  string                     `json:"description"`
-	CodeToSolve  string                     `json:"codeToSolve"`
-	CanEdit      bool                       `json:"canEdit"`
+	ResponseInfo    response_info.ResponseInfo `json:"responseInfo"`
+	Description     string                     `json:"description"`
+	TaskType        string                     `json:"taskType"`
+	ProgrammingLang string                     `json:"programmingLang"`
+	CodeToSolve     string                     `json:"codeToSolve"`
+	CanEdit         bool                       `json:"canEdit"`
 }
 
 func getErrorResponse(msg string) *Response {
 	return &Response{
-		ResponseInfo: response_info.Error(msg),
-		Description:  "",
-		CodeToSolve:  "",
-		CanEdit:      false,
+		ResponseInfo:    response_info.Error(msg),
+		Description:     "",
+		CodeToSolve:     "",
+		TaskType:        "",
+		ProgrammingLang: "",
+		CanEdit:         false,
 	}
 }
 
-func getOKResponse(codeToSolve string, canEdit bool, description string) *Response {
+func getOKResponse(codeToSolve string, canEdit bool, description string, taskType string, programmingLang string) *Response {
 	return &Response{
-		ResponseInfo: response_info.OK(),
-		Description:  description,
-		CodeToSolve:  codeToSolve,
-		CanEdit:      canEdit,
+		ResponseInfo:    response_info.OK(),
+		Description:     description,
+		TaskType:        taskType,
+		ProgrammingLang: programmingLang,
+		CodeToSolve:     codeToSolve,
+		CanEdit:         canEdit,
 	}
 }
 
@@ -106,11 +113,20 @@ func New(logger *slog.Logger, storage *database.Storage) http.HandlerFunc {
 			return
 		}
 
+		// Get programming lang
+		programmingLanguageName, err := storage.GetProgrammingLanguageNameById(taskDetails.ProgrammingLanguageID)
+		if err != nil {
+			log.Error("invalid programming language found for id"+strconv.Itoa(int(taskDetails.ProgrammingLanguageID)), sl.Err(err))
+			writer.WriteHeader(http.StatusBadRequest)
+			render.JSON(writer, request, getErrorResponse("invalid programming language found"))
+			return
+		}
+
 		// Проверка прав редактирования
 		canEdit := userID == taskDetails.UserID
 
 		log.Info("got task by alias from db", slog.String("alias", alias), slog.Bool("canEdit", canEdit))
 		writer.WriteHeader(http.StatusOK)
-		render.JSON(writer, request, getOKResponse(codeFromDb, canEdit, description))
+		render.JSON(writer, request, getOKResponse(codeFromDb, canEdit, description, taskDetails.Type, programmingLanguageName))
 	}
 }

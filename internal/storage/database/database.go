@@ -373,6 +373,23 @@ func (s *Storage) GetProgrammingLanguageIDByName(name string) (int64, error) {
 	return id, nil
 }
 
+func (s *Storage) GetProgrammingLanguageNameById(id int64) (string, error) {
+	query := `
+        SELECT name
+        FROM programming_languages
+        WHERE id = $1
+    `
+	var name string
+	err := s.db.QueryRow(context.Background(), query, id).Scan(&name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", fmt.Errorf("programming language %q not found", name)
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to get programming language ID: %v", err)
+	}
+	return name, nil
+}
+
 func (s *Storage) CheckAliasExist(alias string) (bool, error) {
 	query := `
         SELECT EXISTS (

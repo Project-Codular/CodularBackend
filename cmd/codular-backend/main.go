@@ -78,9 +78,9 @@ func main() {
 	router := chi.NewRouter()
 
 	router.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"https://i-am-a-saw.github.io", "http://172.24.112.1:8082", "http://localhost:3000"},
+		AllowedOrigins:   []string{"https://i-am-a-saw.github.io", "http://172.24.112.1:8082", "http://localhost:3000", "http://localhost:5175", "http://localhost:63342"},
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Content-Type", "Authorization", "X-Requested-With"},
+		AllowedHeaders:   []string{"Content-Type", "content-type", "Authorization", "X-Requested-With"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
