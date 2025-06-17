@@ -224,6 +224,52 @@ func (s *Storage) ListPublicTasks(taskType string, offset, limit int) ([]Task, i
 	return tasks, total, nil
 }
 
+// ListUserTasks returns a list of tasks for a specific user with pagination
+func (s *Storage) ListUserTasks(userID int64, offset, limit int) ([]Task, int, error) {
+	// Query for user tasks
+	query := `
+        SELECT aliases.alias, tasks.id, tasks.type, tasks.description, programming_languages.name, tasks.created_at
+        FROM aliases
+        JOIN tasks ON aliases.task_id = tasks.id
+        JOIN programming_languages ON tasks.programming_language_id = programming_languages.id
+        WHERE tasks.user_id = $1
+        ORDER BY tasks.created_at DESC
+        LIMIT $2 OFFSET $3
+    `
+	rows, err := s.db.Query(context.Background(), query, userID, limit, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query user tasks: %v", err)
+	}
+	defer rows.Close()
+
+	var tasks []Task
+	for rows.Next() {
+		var task Task
+		var createdAt time.Time
+		err := rows.Scan(&task.Alias, &task.TaskID, &task.Type, &task.Description, &task.ProgrammingLanguage, &createdAt)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to scan user task: %v", err)
+		}
+		task.CreatedAt = createdAt.Format(time.RFC3339)
+		tasks = append(tasks, task)
+	}
+
+	// Query for total count
+	countQuery := `
+        SELECT COUNT(*)
+        FROM aliases
+        JOIN tasks ON aliases.task_id = tasks.id
+        WHERE tasks.user_id = $1
+    `
+	var total int
+	err = s.db.QueryRow(context.Background(), countQuery, userID).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query total count: %v", err)
+	}
+
+	return tasks, total, nil
+}
+
 // GetTaskDetailsByAlias возвращает детали задачи по алиасу
 func (s *Storage) GetTaskDetailsByAlias(alias string) (TaskDetails, error) {
 	query := `

@@ -13,6 +13,7 @@ import (
 	"codular-backend/internal/http_server/handlers/get_task/get_task"
 	"codular-backend/internal/http_server/handlers/get_task_list"
 	"codular-backend/internal/http_server/handlers/get_user_email"
+	"codular-backend/internal/http_server/handlers/get_user_tasks"
 	"codular-backend/internal/http_server/handlers/regenerate"
 	"codular-backend/internal/http_server/handlers/solve/noises_check"
 	"codular-backend/internal/http_server/handlers/solve/skips_check"
@@ -121,6 +122,7 @@ func main() {
 			r.Post("/skips/solve", skips_check.New(logger, storage))
 			r.Post("/noises/solve", noises_check.New(logger, storage))
 			r.Get("/task/{alias}", get_task.New(logger, storage))
+			r.Get("/user/tasks", get_user_tasks.UserTasks(logger, storage))
 			r.Patch("/task/{alias}/regenerate", regenerate.New(logger, storage))
 			r.Patch("/task/{alias}/set-access", edit_task.ChangeAccess(logger, storage))
 			r.Get("/submission-status/{submission_id}", submission_status.New(logger, storage))
